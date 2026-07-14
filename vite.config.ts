@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, (process as any).cwd(), '');
 
   return {
-    base: '/Nexo/',
+    base: process.env.NODE_ENV === 'production' ? '/Nexo/' : '/',
     plugins: [react()],
     server: {
       port: 3000,

@@ -437,8 +437,8 @@ const App: React.FC = () => {
     );
   }
 
-  if (!user && !isGuest) {
-    return <Login onGuestLogin={handleGuestLogin} />;
+  if (!user) {
+    return <Login />;
   }
 
   return (

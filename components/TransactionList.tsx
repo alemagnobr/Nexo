@@ -1,0 +1,1918 @@
+
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Transaction, TransactionType, TransactionStatus, PaymentMethod, Budget, View, Category, Wallet as WalletData, WalletType } from '../types';
+import { Plus, Trash2, CheckCircle, Clock, ArrowUpCircle, ArrowDownCircle, Wallet, Wand2, Loader2, Camera, Repeat, ChevronLeft, ChevronRight, Calendar, Pencil, ListFilter, AlertTriangle, AlertCircle, Layers, Bell, Search, Filter, X, Smartphone, CreditCard, Banknote, Landmark, Save, MoreHorizontal, Sigma, CalendarDays, StickyNote, Baby, Briefcase, Infinity, Zap, ChevronUp, ChevronDown, ArrowDown, ArrowUp, TrendingUp } from 'lucide-react';
+import { suggestCategory, analyzeReceipt } from '../services/geminiService';
+import { WalletsView } from './WalletsView';
+import { CurrencyInput } from './CurrencyInput';
+
+interface TransactionListProps {
+  transactions: Transaction[];
+  budgets: Budget[];
+  categories?: Category[]; // New prop
+  wallets?: WalletData[]; // New prop
+  onAdd: (t: Omit<Transaction, 'id'>) => void;
+  onUpdate: (id: string, updates: Partial<Transaction>) => void;
+  onDelete: (id: string) => void;
+  onToggleStatus: (id: string, walletId?: string) => void;
+  onAddWallet?: (wallet: Omit<WalletData, 'id'>) => void;
+  onUpdateWallet?: (id: string, updates: Partial<WalletData>) => void;
+  onDeleteWallet?: (id: string, migrateToWalletId?: string) => void;
+  onNavigate: (view: View) => void;
+  privacyMode: boolean;
+  hasApiKey: boolean;
+  quickActionSignal?: number;
+}
+
+const PAYMENT_LABELS: Record<string, string> = {
+  'credit_card': 'Crédito',
+  'debit_card': 'Débito',
+  'cash': 'Dinheiro',
+  'pix': 'PIX',
+  'direct_debit': 'Déb. Auto',
+  'bank_transfer': 'TED/DOC',
+  'deposit': 'Depósito',
+  'boleto': 'Boleto',
+};
+
+// Helper: Calculate Nth Business Day of a month
+const getNthBusinessDay = (year: number, monthIndex: number, n: number): string => {
+    let date = new Date(year, monthIndex, 1);
+    let count = 0;
+    // Safety break
+    let loopLimit = 0;
+    while (count < n && loopLimit < 31) {
+        // 0 = Sun, 6 = Sat
+        const dayOfWeek = date.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            count++;
+        }
+        if (count === n) break;
+        date.setDate(date.getDate() + 1);
+        loopLimit++;
+    }
+    return date.toISOString().split('T')[0];
+};
+
+// Icons for payment methods
+const PaymentIcon = ({ method, className }: { method: string, className?: string }) => {
+    switch(method) {
+        case 'credit_card': return <CreditCard className={className} />;
+        case 'debit_card': return <CreditCard className={className} />;
+        case 'cash': return <Banknote className={className} />;
+        case 'pix': return <Smartphone className={className} />;
+        case 'boleto': return <Landmark className={className} />;
+        default: return <Landmark className={className} />;
+    }
+};
+
+const EXPENSE_PAYMENT_METHODS = ['credit_card', 'debit_card', 'direct_debit', 'pix', 'cash', 'boleto'];
+const INCOME_PAYMENT_METHODS = ['pix', 'bank_transfer', 'cash', 'deposit'];
+
+export const TransactionList: React.FC<TransactionListProps> = ({ transactions, budgets, categories = [], wallets = [], onAdd, onUpdate, onDelete, onToggleStatus, onAddWallet, onUpdateWallet, onDeleteWallet, onNavigate, privacyMode, hasApiKey, quickActionSignal }) => {
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [loadingAutoCat, setLoadingAutoCat] = useState(false);
+  const [analyzingReceipt, setAnalyzingReceipt] = useState(false);
+  const [completingTransaction, setCompletingTransaction] = useState<Transaction | null>(null);
+  const [completionWalletId, setCompletionWalletId] = useState<string>('');
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const lateBillsCount = useMemo(() => {
+    const today = new Date(new Date().setHours(0,0,0,0));
+    return transactions.filter(t => t.type === 'expense' && t.status === 'pending' && new Date(t.date) < today).length;
+  }, [transactions]);
+  
+  // --- FILTERS STATE ---
+  const [viewFilter, setViewFilter] = useState<'all' | 'income' | 'expense' | 'late' | 'fixed'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [paymentFilter, setPaymentFilter] = useState<string>('all');
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // --- EDITING & RECURRENCE STATE ---
+  const [editingId, setEditingId] = useState<string | null>(null); // For full form
+  const [editingGhostId, setEditingGhostId] = useState<string | null>(null);
+  const editScopeRef = useRef<'single' | 'forward'>('forward');
+  const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
+  const [inlineEditingAmount, setInlineEditingAmount] = useState<string>('');
+  const [recurrenceMode, setRecurrenceMode] = useState<'monthly' | 'days'>('monthly');
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+
+  // --- INSS STATE ---
+  const [hasInss, setHasInss] = useState(false);
+  const [inssPercentage, setInssPercentage] = useState('');
+
+  // --- ALIMONY STATE (Pensão) ---
+  const [hasAlimony, setHasAlimony] = useState(false);
+  const [alimonyPercentage, setAlimonyPercentage] = useState('');
+
+  // --- OTHER DEDUCTIONS STATE ---
+  const [hasOtherDeductions, setHasOtherDeductions] = useState(false);
+  const [otherDeductionsAmount, setOtherDeductionsAmount] = useState('');
+  const [otherDeductionsDesc, setOtherDeductionsDesc] = useState('');
+
+  // --- CONSIGNADO STATE ---
+  const [hasConsignado, setHasConsignado] = useState(false);
+  const [consignadoAmount, setConsignadoAmount] = useState('');
+  const [consignadoInstallments, setConsignadoInstallments] = useState('');
+
+  // --- BUSINESS DAY STATE (Salário) ---
+  const [useBusinessDay, setUseBusinessDay] = useState(false);
+  const [businessDayOrdinal, setBusinessDayOrdinal] = useState('5');
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // Ref for auto-scrolling to form
+  const formRef = useRef<HTMLDivElement>(null);
+
+  const [transactionError, setTransactionError] = useState<string>('');
+  const [showNegativeBalanceWarning, setShowNegativeBalanceWarning] = useState(false);
+  const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
+
+  const [newTransaction, setNewTransaction] = useState({
+    description: '',
+    amount: '',
+    type: 'expense' as TransactionType,
+    category: 'Outros',
+    date: new Date().toISOString().split('T')[0],
+    time: '',
+    status: 'paid' as TransactionStatus,
+    paymentMethod: 'credit_card' as PaymentMethod,
+    walletId: '',
+    isRecurring: false,
+    autoPay: false, // New
+    installments: '',
+    observation: ''
+  });
+
+  // Dynamic Category Options based on Type
+  const currentCategoryOptions = useMemo(() => {
+      if (categories.length === 0) return ['Outros'];
+      return categories
+        .filter(c => c.type === newTransaction.type)
+        .map(c => c.name);
+  }, [categories, newTransaction.type]);
+
+  // Helper to get category style dynamically
+  const getCategoryStyle = (catName: string) => {
+      const cat = categories.find(c => c.name === catName);
+      const color = cat?.color || 'slate';
+      return `bg-${color}-100 text-${color}-700 border-${color}-200 dark:bg-${color}-900/30 dark:text-${color}-300 dark:border-${color}-800`;
+  };
+
+  useEffect(() => {
+    if (quickActionSignal && Date.now() - quickActionSignal < 2000) {
+        setIsFormOpen(true);
+        resetForm();
+    }
+  }, [quickActionSignal]);
+
+  // Effect to scroll to form when it opens or editing changes
+  useEffect(() => {
+    if (isFormOpen && formRef.current) {
+        // Delay slightly to ensure render and avoid sticky header overlap
+        setTimeout(() => {
+            formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+    }
+  }, [isFormOpen, editingId]);
+
+  // Effect to auto-update date if Business Day logic is active
+  useEffect(() => {
+      if (useBusinessDay && newTransaction.category === 'Salário') {
+          const [year, month] = newTransaction.date.split('-').map(Number);
+          const ordinal = parseInt(businessDayOrdinal) || 5;
+          const newDate = getNthBusinessDay(year, month - 1, ordinal);
+          
+          if (newDate !== newTransaction.date) {
+              setNewTransaction(prev => ({ ...prev, date: newDate }));
+          }
+      }
+  }, [useBusinessDay, businessDayOrdinal, newTransaction.category]); 
+
+  const currentPaymentMethods = useMemo(() => {
+    return newTransaction.type === 'income' ? INCOME_PAYMENT_METHODS : EXPENSE_PAYMENT_METHODS;
+  }, [newTransaction.type]);
+
+  const handlePrevMonth = () => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  const handleNextMonth = () => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+
+  // --- ALERTS LOGIC ---
+  const budgetAlerts = useMemo(() => {
+    const alerts: { title: string; message: string; type: 'warning' }[] = [];
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    const monthStr = today.toISOString().slice(0, 7);
+
+    budgets.forEach(budget => {
+        const isRelevant = (budget.isRecurring && !budgets.some(b => b.category === budget.category && b.month === monthStr && !b.isRecurring)) || budget.month === monthStr;
+        
+        if (!isRelevant) return;
+
+        const spent = transactions
+            .filter(t => t.type === 'expense' && t.category === budget.category &&
+                new Date(t.date).getMonth() === currentMonth &&
+                new Date(t.date).getFullYear() === currentYear
+            )
+            .reduce((sum, t) => sum + t.amount, 0);
+
+        if (spent >= budget.limit) {
+                alerts.push({
+                title: `Limite Excedido: ${budget.category}`,
+                message: `Você estourou o teto definido para esta categoria.`,
+                type: 'warning'
+            });
+        }
+    });
+    return alerts;
+  }, [budgets, transactions]);
+
+  // --- DYNAMIC TOTALS (MONTHLY VIEW) ---
+  const monthlyTotals = useMemo(() => {
+      const mealWalletIds = new Set(wallets.filter(w => w.type === WalletType.MEAL_TICKET).map(w => w.id));
+      
+      const currentMonthTransactions = transactions.filter(t => {
+          const [year, month] = t.date.split('-');
+          return (
+              (!t.walletId || !mealWalletIds.has(t.walletId)) &&
+              parseInt(year) === currentDate.getFullYear() &&
+              parseInt(month) === currentDate.getMonth() + 1
+          );
+      });
+
+      const income = currentMonthTransactions
+          .filter(t => t.type === 'income')
+          .reduce((sum, t) => sum + t.amount, 0);
+
+      const expense = currentMonthTransactions
+          .filter(t => t.type === 'expense')
+          .reduce((sum, t) => sum + t.amount, 0);
+
+      return { income, expense, balance: income - expense };
+  }, [transactions, currentDate, wallets]);
+
+  // --- FILTERING LOGIC (FOR THE LIST) ---
+  const filteredTransactions = useMemo(() => {
+    const baseFiltered = transactions.filter(t => {
+      // 1. Month Filter (Ignore if viewFilter is 'late')
+      if (viewFilter !== 'late') {
+          const [year, month] = t.date.split('-');
+          const matchesMonth = (
+            parseInt(year) === currentDate.getFullYear() &&
+            parseInt(month) === currentDate.getMonth() + 1
+          );
+          if (!matchesMonth) return false;
+      }
+
+      // 2. Type Filter
+      if (viewFilter === 'income' && t.type !== 'income') return false;
+      if (viewFilter === 'expense' && t.type !== 'expense') return false;
+      
+      // 2.5 Late Filter
+      if (viewFilter === 'late') {
+          if (t.status !== 'pending' || t.date >= todayStr) return false;
+      }
+
+      // 2.6 Fixed Filter
+      if (viewFilter === 'fixed') {
+          if (!t.isRecurring) return false;
+      }
+
+      // 3. Search Filter
+      if (searchQuery && !t.description.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+
+      // 4. Category Filter
+      if (categoryFilter !== 'all' && t.category !== categoryFilter) return false;
+
+      // 5. Payment Filter
+      if (paymentFilter !== 'all' && t.paymentMethod !== paymentFilter) return false;
+
+      return true;
+    });
+
+    // --- GHOST TRANSACTIONS LOGIC (Future Months) ---
+    const today = new Date();
+    const isFutureMonth = currentDate.getFullYear() > today.getFullYear() || 
+                          (currentDate.getFullYear() === today.getFullYear() && currentDate.getMonth() > today.getMonth());
+
+    if (isFutureMonth && viewFilter !== 'late') {
+        const recurringTemplates = new Map<string, Transaction>();
+        transactions.forEach(t => {
+            if (t.isRecurring) {
+                const existing = recurringTemplates.get(t.description);
+                if (!existing || new Date(t.date) > new Date(existing.date)) {
+                    recurringTemplates.set(t.description, t);
+                }
+            }
+        });
+
+        recurringTemplates.forEach((template, description) => {
+            const exists = transactions.some(t => {
+                const tDate = new Date(t.date);
+                return t.description === description &&
+                       tDate.getMonth() === currentDate.getMonth() &&
+                       tDate.getFullYear() === currentDate.getFullYear();
+            });
+
+            if (!exists) {
+                const tDate = new Date(template.date + 'T00:00:00');
+                const targetDay = tDate.getDate();
+                const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+                const finalDay = Math.min(targetDay, daysInMonth);
+                
+                const newMonthStr = String(currentDate.getMonth() + 1).padStart(2, '0');
+                const newDayStr = String(finalDay).padStart(2, '0');
+                const newDateIso = `${currentDate.getFullYear()}-${newMonthStr}-${newDayStr}`;
+
+                let matches = true;
+                if (viewFilter === 'income' && template.type !== 'income') matches = false;
+                if (viewFilter === 'expense' && template.type !== 'expense') matches = false;
+                if (viewFilter === 'fixed' && !template.isRecurring) matches = false;
+                if (searchQuery && !template.description.toLowerCase().includes(searchQuery.toLowerCase())) matches = false;
+                if (categoryFilter !== 'all' && template.category !== categoryFilter) matches = false;
+                if (paymentFilter !== 'all' && template.paymentMethod !== paymentFilter) matches = false;
+
+                if (matches) {
+                    baseFiltered.push({
+                        ...template,
+                        id: `ghost-${template.id}-${newDateIso}`,
+                        date: newDateIso,
+                        status: 'pending',
+                        isGhost: true,
+                        observation: 'Valor referente ao mês anterior'
+                    });
+                }
+            }
+        });
+    }
+
+    return baseFiltered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [transactions, currentDate, viewFilter, searchQuery, categoryFilter, paymentFilter]);
+
+  // --- GROUPING LOGIC (By Date) with ACCUMULATED BALANCE ---
+  const groupedTransactions = useMemo(() => {
+      const groups: Record<string, { transactions: Transaction[], total: number }> = {};
+      
+      // 1. Group transactions by date
+      filteredTransactions.forEach(t => {
+          if (!groups[t.date]) {
+              groups[t.date] = { transactions: [], total: 0 };
+          }
+          groups[t.date].transactions.push(t);
+          
+          // Somar apenas PENDENTES para projeção (incluindo Ghosts)
+          const walletType = wallets.find(w => w.id === t.walletId)?.type;
+          const isExcluded = walletType === WalletType.MEAL_TICKET || walletType === WalletType.CREDIT_CARD;
+          if (t.status === 'pending' && !isExcluded) {
+              const val = t.type === 'income' ? t.amount : -t.amount;
+              groups[t.date].total += val;
+          }
+      });
+
+      // Sort transactions within each group
+      Object.values(groups).forEach(group => {
+          group.transactions.sort((a, b) => {
+              // 1. Paid first, Pending last
+              if (a.status === 'paid' && b.status === 'pending') return -1;
+              if (a.status === 'pending' && b.status === 'paid') return 1;
+              
+              // 2. Custom order
+              const orderA = a.order || 0;
+              const orderB = b.order || 0;
+              return orderA - orderB;
+          });
+      });
+
+      // 2. Create array sorted Newest -> Oldest (Standard display order)
+      const sortedGroups = Object.entries(groups)
+          .map(([date, data]) => ({ date, ...data }))
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      // 3. Calculate Running Balance (Accumulated)
+      const chronological = [...sortedGroups].reverse(); // Oldest first
+      let runningTotal = wallets.filter(w => w.type !== WalletType.MEAL_TICKET && w.type !== WalletType.CREDIT_CARD).reduce((acc, w) => acc + w.balance, 0);
+      
+      const chronologicalWithBalance = chronological.map(group => {
+          runningTotal += group.total;
+          return { ...group, runningBalance: runningTotal };
+      });
+
+      // Reverse back to Newest -> Oldest for display
+      return chronologicalWithBalance.reverse();
+
+  }, [filteredTransactions, wallets]);
+
+  const formatValue = (val: number) => {
+    if (privacyMode) return '••••';
+    return `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  };
+
+  const formatDateFriendly = (dateStr: string) => {
+      const date = new Date(dateStr + 'T12:00:00');
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      if (date.toDateString() === today.toDateString()) return 'Hoje';
+      if (date.toDateString() === yesterday.toDateString()) return 'Ontem';
+      
+      const weekday = date.toLocaleDateString('pt-BR', { weekday: 'long' });
+      const dayMonth = date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+      return `${weekday.split('-')[0]}, ${dayMonth}`;
+  };
+
+  const handleAutoCategorize = async () => {
+    if (!newTransaction.description) return;
+    setLoadingAutoCat(true);
+    const suggested = await suggestCategory(newTransaction.description);
+    // TODO: Update suggestCategory to use dynamic categories names if passed
+    // For now, checks if suggested is in current list
+    const isValid = currentCategoryOptions.includes(suggested);
+    setNewTransaction(prev => ({ ...prev, category: isValid ? suggested : 'Outros' }));
+    setLoadingAutoCat(false);
+  };
+
+  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newType = e.target.value as TransactionType;
+    // Get valid categories for new type
+    const validCats = categories.filter(c => c.type === newType).map(c => c.name);
+    const defaultMethod = newType === 'income' ? 'pix' : 'credit_card';
+    setNewTransaction(prev => ({ ...prev, type: newType, category: validCats[0] || 'Outros', paymentMethod: defaultMethod as PaymentMethod }));
+  };
+
+  const resetForm = () => {
+    setNewTransaction({ description: '', amount: '', type: 'expense', category: 'Outros', date: new Date().toISOString().split('T')[0], time: '', status: 'pending', paymentMethod: 'credit_card', walletId: '', isRecurring: false, autoPay: false, installments: '', observation: '' });
+    setEditingId(null);
+    setRecurrenceMode('monthly');
+    setSelectedDays([]);
+    setHasAlimony(false);
+    setAlimonyPercentage('');
+    setHasOtherDeductions(false);
+    setOtherDeductionsAmount('');
+    setOtherDeductionsDesc('');
+    setUseBusinessDay(false);
+    setBusinessDayOrdinal('5');
+  }
+
+  const handleEdit = (t: any) => {
+    setNewTransaction({
+        description: t.description || '', 
+        amount: (t.amount || 0).toString(), 
+        type: t.type || 'expense', 
+        category: t.category || 'Outros', 
+        date: t.date || new Date().toISOString().split('T')[0], 
+        time: t.time || '',
+        status: t.status || 'paid', 
+        paymentMethod: t.paymentMethod || (t.type === 'income' ? 'pix' : 'credit_card'), 
+        walletId: t.walletId || '',
+        isRecurring: t.isRecurring || false, 
+        autoPay: t.autoPay || false,
+        installments: '',
+        observation: t.observation || ''
+    });
+    
+    if (t.isGhost) {
+        setEditingId(null);
+        setEditingGhostId(t.id);
+        editScopeRef.current = 'single';
+    } else {
+        setEditingId(t.id);
+        setEditingGhostId(null);
+        editScopeRef.current = t.groupId || t.isRecurring ? 'forward' : 'single';
+    }
+    
+    setHasInss(false);
+    setInssPercentage('');
+    setHasAlimony(false);
+    setAlimonyPercentage('');
+    setHasOtherDeductions(false);
+    setOtherDeductionsAmount('');
+    setOtherDeductionsDesc('');
+    setHasConsignado(false);
+    setConsignadoAmount('');
+    setConsignadoInstallments('');
+    
+    setIsFormOpen(true);
+  };
+
+  const handleInlineEditStart = (e: React.MouseEvent, t: Transaction) => {
+    e.stopPropagation();
+    setInlineEditingId(t.id);
+    setInlineEditingAmount(t.amount.toString());
+  };
+
+  const handleInlineEditSave = (t: Transaction) => {
+    if (inlineEditingAmount.trim() !== '') {
+      const newAmount = parseFloat(inlineEditingAmount.replace(',', '.'));
+      if (!isNaN(newAmount) && newAmount !== t.amount) {
+        onUpdate(t.id, { amount: newAmount });
+        
+        // Update future transactions in the same group
+        if (t.groupId) {
+            const futureTxs = transactions.filter(tx => 
+                tx.groupId === t.groupId && 
+                tx.id !== t.id && 
+                tx.date >= t.date
+            );
+            
+            futureTxs.forEach(ft => {
+                onUpdate(ft.id, { amount: newAmount });
+            });
+        }
+      }
+    }
+    setInlineEditingId(null);
+  };
+
+  const toggleDay = (day: number) => {
+      setSelectedDays(prev => 
+          prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+      );
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    let baseAmount = parseFloat(newTransaction.amount);
+    if (isNaN(baseAmount) || baseAmount <= 0) {
+      setTransactionError('O valor deve ser maior que zero.');
+      return;
+    }
+
+    // Check future date
+    const today = new Date(new Date().setHours(0,0,0,0));
+    const txDate = new Date(newTransaction.date);
+    let finalStatus = newTransaction.status;
+    if (txDate > today && finalStatus === 'paid') {
+      finalStatus = 'pending';
+    }
+
+    // Negative balance warning
+    if (finalStatus === 'paid' && newTransaction.type === 'expense' && newTransaction.walletId) {
+      const wallet = wallets.find(w => w.id === newTransaction.walletId);
+      if (wallet && baseAmount > wallet.balance) {
+         setPendingSubmitData({ ...newTransaction, status: finalStatus, amount: String(baseAmount) });
+         setShowNegativeBalanceWarning(true);
+         return;
+      }
+    }
+
+    executeSubmit({ ...newTransaction, status: finalStatus, amount: String(baseAmount) });
+  };
+
+  const executeSubmit = (txData: any) => {
+    const originalAmount = parseFloat(txData.amount);
+    const originalObservation = txData.observation || '';
+
+    const calculateDynamicDeductions = (iterationIndex: number) => {
+      let currentIterAmount = originalAmount;
+      let currentIterObservation = originalObservation;
+      
+      if (txData.type === 'income' && txData.category === 'Salário') {
+           let iterTotalDeductions = 0;
+           const iterDetails: string[] = [];
+           
+           if (hasInss) {
+               const pct = parseFloat(inssPercentage);
+               if (!isNaN(pct) && pct > 0 && pct < 100) {
+                   const amt = originalAmount * (pct / 100);
+                   iterTotalDeductions += amt;
+                   iterDetails.push(`INSS (${pct}%): R$ ${amt.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
+               }
+           }
+
+           if (hasOtherDeductions) {
+               const parsedOther = parseFloat(otherDeductionsAmount);
+               if (!isNaN(parsedOther) && parsedOther > 0) {
+                   iterTotalDeductions += parsedOther;
+                   const desc = otherDeductionsDesc || 'Outros Descontos';
+                   iterDetails.push(`${desc}: R$ ${parsedOther.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
+               }
+           }
+
+           if (hasAlimony) {
+               const pct = parseFloat(alimonyPercentage);
+               if (!isNaN(pct) && pct > 0 && pct < 100) {
+                   const amt = originalAmount * (pct / 100);
+                   iterTotalDeductions += amt;
+                   iterDetails.push(`Pensão Alimentícia (${pct}%): R$ ${amt.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
+               }
+           }
+
+           if (hasConsignado) {
+               const parsedConsignado = parseFloat(consignadoAmount);
+               const numConsignadoInst = parseInt(consignadoInstallments) || 1;
+               if (!isNaN(parsedConsignado) && parsedConsignado > 0 && iterationIndex < numConsignadoInst) {
+                   iterTotalDeductions += parsedConsignado;
+                   iterDetails.push(`Empréstimo Consignado: R$ ${parsedConsignado.toLocaleString('pt-BR', {minimumFractionDigits: 2})} (Parcela ${iterationIndex + 1}/${numConsignadoInst})`);
+               }
+           }
+
+           if (iterTotalDeductions > 0) {
+               currentIterAmount -= iterTotalDeductions;
+               const deductionString = `Descontos realizados em folha:\n${iterDetails.join('\n')}`;
+               currentIterObservation = currentIterObservation ? `${currentIterObservation}\n\n${deductionString}` : deductionString;
+           }
+      }
+      
+      return { amount: currentIterAmount, observation: currentIterObservation };
+    };
+
+    const baseTransactions: Omit<Transaction, 'id'>[] = [];
+
+    // Main Transaction (Net Salary or regular transaction)
+    baseTransactions.push({
+      description: txData.description, 
+      amount: originalAmount,
+      type: txData.type, 
+      category: txData.category, 
+      date: txData.date, 
+      time: txData.time || undefined,
+      status: txData.status, 
+      paymentMethod: txData.paymentMethod, 
+      walletId: txData.walletId,
+      isRecurring: txData.isRecurring,
+      autoPay: txData.status === 'pending' ? txData.autoPay : false,
+      observation: originalObservation
+    });
+
+    // Apply Recurrence to ALL base transactions
+    baseTransactions.forEach((transactionData, index) => {
+        const isMainTransaction = index === 0; // Only the main transaction can be edited
+
+        // LOGIC FOR RECURRENCE
+        let finalIsRecurring = txData.isRecurring;
+        if ((editingId || editingGhostId) && editScopeRef.current === 'single') {
+            finalIsRecurring = false;
+        }
+
+        if (finalIsRecurring) {
+            const groupId = `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            
+            // Mode 1: Daily Recurrence (Specific Days in Month)
+            if (recurrenceMode === 'days' && selectedDays.length > 0) {
+                const [year, month] = txData.date.split('-').map(Number);
+                const daysInMonth = new Date(year, month, 0).getDate();
+                
+                selectedDays.forEach(day => {
+                    if (day <= daysInMonth) {
+                        const dyn = calculateDynamicDeductions(0);
+                        const dayStr = String(day).padStart(2, '0');
+                        const monthStr = String(month).padStart(2, '0');
+                        const isoDate = `${year}-${monthStr}-${dayStr}`;
+                        
+                        onAdd({
+                            ...transactionData,
+                            amount: dyn.amount,
+                            observation: dyn.observation,
+                            description: `${transactionData.description} (Dia ${day})`,
+                            date: isoDate,
+                            isRecurring: false,
+                            groupId
+                        });
+                    }
+                });
+            } 
+            // Mode 2: Standard Monthly / Installments
+            else {
+                const numInstallments = parseInt(txData.installments);
+                if (!isNaN(numInstallments) && numInstallments > 1) {
+                    const [startYear, startMonth, startDay] = txData.date.split('-').map(Number);
+                    const businessOrdinal = parseInt(businessDayOrdinal) || 5;
+
+                    for(let i=0; i < numInstallments; i++) {
+                         let isoDate;
+                         if (useBusinessDay && txData.category === 'Salário' && txData.type === 'income') {
+                             isoDate = getNthBusinessDay(startYear, (startMonth - 1) + i, businessOrdinal);
+                         } else {
+                             const nextDate = new Date(startYear, (startMonth - 1) + i, startDay);
+                             isoDate = nextDate.toISOString().split('T')[0];
+                         }
+
+                         const dyn = calculateDynamicDeductions(i);
+                         const desc = `${transactionData.description} (${i+1}/${numInstallments})`;
+                         onAdd({ ...transactionData, amount: dyn.amount, observation: dyn.observation, description: desc, date: isoDate, isRecurring: false, groupId });
+                    }
+                } else {
+                    // Infinite Subscription
+                    const dyn = calculateDynamicDeductions(0);
+                    const finalTx = { ...transactionData, amount: dyn.amount, observation: dyn.observation };
+                    if (editingId && isMainTransaction) onUpdate(editingId, finalTx);
+                    else onAdd(finalTx);
+                }
+            }
+        } 
+        // NO RECURRENCE
+        else {
+            const dyn = calculateDynamicDeductions(0);
+            const finalTx = { ...transactionData, amount: dyn.amount, observation: dyn.observation, isRecurring: false };
+            if (editingId && isMainTransaction) {
+                const originalTx = transactions.find(t => t.id === editingId);
+                onUpdate(editingId, finalTx);
+                
+                // Update future transactions in the same group
+                if (editScopeRef.current === 'forward' && originalTx && originalTx.groupId) {
+                    const futureTxs = transactions.filter(t => 
+                        t.groupId === originalTx.groupId && 
+                        t.id !== editingId && 
+                        t.date >= originalTx.date
+                    );
+                    
+                    futureTxs.forEach(ft => {
+                        onUpdate(ft.id, {
+                            amount: finalTx.amount,
+                            category: finalTx.category,
+                            walletId: finalTx.walletId,
+                            paymentMethod: finalTx.paymentMethod
+                        });
+                    });
+                } else if (editScopeRef.current === 'single' && originalTx && originalTx.isRecurring) {
+                    // Update the original transaction to be non-recurring for Apenas Esta
+                    onUpdate(editingId, finalTx);
+                    
+                    // Create a continuation template for next month since we broke the original chain
+                    const [y, m, d] = originalTx.date.split('-').map(Number);
+                    const nextMonthDate = new Date(y, m, d);
+                    const nextDateStr = nextMonthDate.toISOString().split('T')[0];
+                    
+                    onAdd({
+                        ...originalTx,
+                        date: nextDateStr,
+                        isRecurring: true
+                    });
+                }
+            }
+            else onAdd(finalTx);
+        }
+    });
+    
+    resetForm();
+    setIsFormOpen(false);
+    setEditingGhostId(null);
+    setTransactionError('');
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setAnalyzingReceipt(true);
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = (reader.result as string).split(',')[1];
+        const data = await analyzeReceipt(base64);
+        if (data) {
+          setNewTransaction(prev => ({
+            ...prev,
+            description: data.description || prev.description,
+            amount: data.amount ? String(data.amount) : prev.amount,
+            date: data.date || prev.date,
+            category: data.category || 'Outros',
+            type: 'expense'
+          }));
+          setIsFormOpen(true);
+        } else alert('Não foi possível ler o recibo.');
+        setAnalyzingReceipt(false);
+      };
+      reader.readAsDataURL(file);
+  };
+
+  const handleToggleClick = (t: Transaction) => {
+    if (t.status === 'pending') {
+        setCompletingTransaction(t);
+        setCompletionWalletId(wallets.length > 0 ? wallets[0].id : '');
+    } else {
+        onToggleStatus(t.id);
+    }
+  };
+
+  const handleMoveTransaction = (groupDate: string, index: number, direction: 'up' | 'down') => {
+      const group = groupedTransactions.find(g => g.date === groupDate);
+      if (!group) return;
+      
+      const newIndex = direction === 'up' ? index - 1 : index + 1;
+      if (newIndex < 0 || newIndex >= group.transactions.length) return;
+      
+      const currentTx = group.transactions[index];
+      const targetTx = group.transactions[newIndex];
+      
+      // Only allow moving within the same status group
+      if (currentTx.status !== targetTx.status) return;
+      
+      // Get all transactions in the same status group
+      const groupTxs = group.transactions.filter(t => t.status === currentTx.status);
+      
+      // Create a new array with the swapped items
+      const newGroupTxs = [...groupTxs];
+      const currentIndexInGroup = newGroupTxs.findIndex(t => t.id === currentTx.id);
+      const targetIndexInGroup = newGroupTxs.findIndex(t => t.id === targetTx.id);
+      
+      // Swap
+      [newGroupTxs[currentIndexInGroup], newGroupTxs[targetIndexInGroup]] = [newGroupTxs[targetIndexInGroup], newGroupTxs[currentIndexInGroup]];
+      
+      // Update order for all items in the group to ensure consistency
+      newGroupTxs.forEach((t, i) => {
+          if (t.order !== i) {
+              onUpdate(t.id, { order: i });
+          }
+      });
+  };
+
+  const handleTransfer = (sourceWalletId: string, targetWalletId: string, amount: number, date: string, observation?: string) => {
+      const sourceWallet = wallets?.find(w => w.id === sourceWalletId);
+      const targetWallet = wallets?.find(w => w.id === targetWalletId);
+      
+      if (!sourceWallet || !targetWallet) return;
+
+      // Create Expense (Saída) on source wallet
+      onAdd({
+        description: `Transferência para ${targetWallet.name}`,
+        amount: amount,
+        type: 'expense',
+        category: 'cat_transferencia_out',
+        date: date,
+        status: 'paid',
+        walletId: sourceWalletId,
+        observation: observation,
+        paymentMethod: 'bank_transfer',
+        isRecurring: false,
+        autoPay: false
+      });
+
+      // Create Income (Entrada) on target wallet
+      onAdd({
+        description: `Transferência de ${sourceWallet.name}`,
+        amount: amount,
+        type: 'income',
+        category: 'cat_transferencia_in',
+        date: date,
+        status: 'paid',
+        walletId: targetWalletId,
+        observation: observation,
+        paymentMethod: 'bank_transfer',
+        isRecurring: false,
+        autoPay: false
+      });
+  };
+
+  const handleConfirmCompletion = () => {
+    if (completingTransaction && completionWalletId) {
+        onToggleStatus(completingTransaction.id, completionWalletId);
+    }
+    setCompletingTransaction(null);
+    setCompletionWalletId('');
+  };
+
+  return (
+    <div className="space-y-6">
+      
+      {/* Transaction Completion Modal */}
+      {completingTransaction && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700 animate-scale-in">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                <CheckCircle className="w-5 h-5" />
+              </div>
+              <h2 className="text-lg font-black text-slate-800 dark:text-white">Concluir Transação</h2>
+            </div>
+            
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">
+              Selecione a conta {completingTransaction.type === 'expense' ? 'de onde o valor foi debitado' : 'onde o valor foi recebido'}:
+            </p>
+            
+            <p className="text-sm font-bold text-slate-800 dark:text-white mb-4 p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+              {completingTransaction.description} (R$ {Math.abs(completingTransaction.amount).toLocaleString('pt-BR', {minimumFractionDigits: 2})})
+            </p>
+
+            <select
+              value={completionWalletId}
+              onChange={e => setCompletionWalletId(e.target.value)}
+              className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl p-3 outline-none focus:border-indigo-500 transition-colors mb-6"
+            >
+              <option value="">Selecione a Conta...</option>
+              {wallets.map(w => (
+                <option key={w.id} value={w.id}>{w.name} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(w.balance)})</option>
+              ))}
+            </select>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCompletingTransaction(null)}
+                className="flex-1 py-2.5 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmCompletion}
+                disabled={!completionWalletId}
+                className="flex-1 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Negative Balance Warning Modal */}
+      {showNegativeBalanceWarning && pendingSubmitData && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className="p-4 border-b border-rose-100 dark:border-rose-900/30 flex justify-between items-center bg-rose-50 dark:bg-rose-900/20">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-rose-100 text-rose-600 dark:bg-rose-900/50 dark:text-rose-400 rounded-lg">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <h3 className="font-bold text-slate-800 dark:text-white">Aviso de Saldo</h3>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowNegativeBalanceWarning(false);
+                  setPendingSubmitData(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-slate-600 dark:text-slate-300 mb-4">
+                Essa transação deixará sua conta com saldo negativo. Deseja continuar mesmo assim?
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowNegativeBalanceWarning(false);
+                    setPendingSubmitData(null);
+                  }}
+                  className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl font-medium transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    executeSubmit(pendingSubmitData);
+                    setShowNegativeBalanceWarning(false);
+                    setPendingSubmitData(null);
+                  }}
+                  className="px-6 py-2 bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-colors shadow-lg shadow-rose-500/30 font-bold"
+                >
+                  Continuar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Wallets Section */}
+      {onAddWallet && onUpdateWallet && onDeleteWallet && (
+        <div className="mb-8">
+          <WalletsView 
+            wallets={wallets || []}
+            transactions={transactions}
+            onAdd={onAddWallet}
+            onUpdate={onUpdateWallet}
+            onDelete={onDeleteWallet}
+            onTransfer={handleTransfer}
+            onUpdateTransaction={onUpdate}
+            onAddTransaction={onAdd}
+          />
+        </div>
+      )}
+
+      {/* 1. TOP BAR: Title, Search, Actions */}
+      <div className="flex flex-col gap-4">
+          {lateBillsCount > 0 && (
+              <div className="flex items-center justify-between bg-rose-50 dark:bg-rose-900/20 p-3 rounded-xl border border-rose-100 dark:border-rose-800/30 animate-fade-in">
+                  <div className="flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-rose-500" />
+                      <div>
+                          <span className="text-sm text-rose-700 dark:text-rose-400 font-bold block">Atenção: Contas Atrasadas</span>
+                          <span className="text-xs text-rose-600 dark:text-rose-400/80">
+                              Você possui {lateBillsCount} {lateBillsCount === 1 ? 'conta atrasada' : 'contas atrasadas'}.
+                          </span>
+                      </div>
+                  </div>
+                  <button 
+                      onClick={() => setViewFilter('late')}
+                      className="px-3 py-1.5 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-lg hover:bg-rose-200 dark:hover:bg-rose-900/60 transition-colors"
+                  >
+                      Ver Atrasadas
+                  </button>
+              </div>
+          )}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-white hidden md:block">Transações</h2>
+            
+            <div className="flex flex-1 w-full md:w-auto gap-3 items-center">
+                <div className="flex-1 relative group">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 group-focus-within:text-indigo-500 transition-colors" />
+                    <input 
+                        type="text"
+                        placeholder="Buscar..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all shadow-sm"
+                    />
+                    {searchQuery && (
+                        <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                            <X className="w-3 h-3" />
+                        </button>
+                    )}
+                </div>
+
+                <button 
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`p-2.5 rounded-xl border transition-all ${showFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-600 dark:bg-indigo-900/30 dark:border-indigo-800 dark:text-indigo-400' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                >
+                    <Filter className="w-5 h-5" />
+                </button>
+
+                <div className="flex items-center bg-indigo-50 dark:bg-indigo-900/30 rounded-xl shadow-sm border border-indigo-200 dark:border-indigo-800 p-1 shrink-0">
+                    <button onClick={handlePrevMonth} className="p-1.5 hover:bg-indigo-100 dark:hover:bg-indigo-800/50 transition-colors rounded-lg text-indigo-700 dark:text-indigo-400"><ChevronLeft className="w-5 h-5" /></button>
+                    <span className="px-3 text-sm font-black text-indigo-800 dark:text-indigo-300 min-w-[90px] text-center flex items-center justify-center gap-1.5">
+                        {currentDate.toLocaleDateString('pt-BR', { month: 'long' }).charAt(0).toUpperCase() + currentDate.toLocaleDateString('pt-BR', { month: 'long' }).slice(1)}/{currentDate.getFullYear().toString().slice(-2)}
+                    </span>
+                    <button onClick={handleNextMonth} className="p-1.5 hover:bg-indigo-100 dark:hover:bg-indigo-800/50 transition-colors rounded-lg text-indigo-700 dark:text-indigo-400"><ChevronRight className="w-5 h-5" /></button>
+                </div>
+            </div>
+
+            <div className="hidden md:flex gap-2">
+                <button
+                    onClick={() => onNavigate(View.SUBSCRIPTIONS)}
+                    className="flex items-center gap-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-4 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors font-medium text-sm shadow-sm"
+                >
+                    <Repeat className="w-4 h-4 text-indigo-500" />
+                    Assinaturas
+                </button>
+                <button
+                    onClick={() => { resetForm(); setIsFormOpen(!isFormOpen); }}
+                    className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/20 font-bold text-sm"
+                >
+                    <Plus className="w-4 h-4" /> Nova
+                </button>
+            </div>
+          </div>
+
+          {showFilters && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700 animate-fade-in-down">
+                  <select 
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                      className="p-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                      <option value="all">Todas Categorias</option>
+                      {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </select>
+                  <select 
+                      value={paymentFilter}
+                      onChange={(e) => setPaymentFilter(e.target.value)}
+                      className="p-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                      <option value="all">Todos Métodos</option>
+                      {[...EXPENSE_PAYMENT_METHODS, ...INCOME_PAYMENT_METHODS].map(m => <option key={m} value={m}>{PAYMENT_LABELS[m]}</option>)}
+                  </select>
+              </div>
+          )}
+      </div>
+
+      {/* 2. BUDGET ALERTS */}
+      {budgetAlerts.length > 0 && (
+         <div className="space-y-2">
+            {budgetAlerts.map((alert, idx) => (
+               <div key={idx} className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4 rounded-xl flex items-start gap-3 animate-fade-in-down shadow-sm">
+                  <div className="bg-amber-100 dark:bg-amber-800 p-2 rounded-full flex-shrink-0">
+                     <Bell className="w-5 h-5 text-amber-600 dark:text-amber-300" />
+                  </div>
+                  <div>
+                     <h4 className="font-bold text-amber-800 dark:text-amber-300 text-sm">{alert.title}</h4>
+                     <p className="text-amber-700 dark:text-amber-400 text-xs mt-0.5">{alert.message}</p>
+                  </div>
+               </div>
+            ))}
+         </div>
+      )}
+
+      {/* 3. DYNAMIC SUMMARY CARDS (MONTHLY TOTALS) */}
+      <div className="rounded-2xl overflow-hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 dark:divide-slate-700">
+          <div className="p-4 md:p-5 flex items-center gap-3 md:gap-4">
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-emerald-200 dark:border-emerald-500/30 flex items-center justify-center shrink-0">
+              <ArrowDown className="w-5 h-5 md:w-6 md:h-6 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider mb-0.5">Entradas</span>
+              <span className="text-lg md:text-xl font-bold text-emerald-600 dark:text-emerald-400 leading-none truncate">
+                {formatValue(monthlyTotals.income)}
+              </span>
+            </div>
+          </div>
+          
+          <div className="p-4 md:p-5 flex items-center gap-3 md:gap-4">
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-rose-200 dark:border-rose-500/30 flex items-center justify-center shrink-0">
+              <ArrowUp className="w-5 h-5 md:w-6 md:h-6 text-rose-600 dark:text-rose-400" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider mb-0.5">Saídas</span>
+              <span className="text-lg md:text-xl font-bold text-rose-600 dark:text-rose-400 leading-none truncate">
+                {formatValue(monthlyTotals.expense)}
+              </span>
+            </div>
+          </div>
+          
+          <div className="p-4 md:p-5 flex items-center gap-3 md:gap-4">
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider mb-0.5">Resultado do Mês</span>
+              <span className={`text-lg md:text-xl font-bold leading-none truncate ${monthlyTotals.balance >= 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                {formatValue(monthlyTotals.balance)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. FORM MODAL */}
+      {isFormOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col my-auto max-h-[90vh] animate-scale-in border border-slate-200 dark:border-slate-700">
+             <div className="p-4 md:p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center sticky top-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur z-20">
+                <h3 className="text-xl font-bold text-slate-800 dark:text-white leading-tight">
+                  {(editingId || editingGhostId) ? 'Editar Transação' : 'Adicionar Transação'}
+                </h3>
+                <button 
+                  onClick={() => setIsFormOpen(false)} 
+                  className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200 rounded-xl transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+             </div>
+
+             <div className="p-4 md:p-6 overflow-y-auto" id="modal-content">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="col-span-1 md:col-span-2">
+            {transactionError && (
+              <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/30 text-rose-600 dark:text-rose-400 p-3 rounded-xl text-sm font-medium flex items-start gap-2 mb-2 animate-fade-in">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                <p>{transactionError}</p>
+              </div>
+            )}
+          </div>
+          
+          <div className="relative">
+            <input
+              required
+              type="text"
+              placeholder="Descrição"
+              value={newTransaction.description}
+              onChange={e => setNewTransaction({ ...newTransaction, description: e.target.value })}
+              className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none w-full pr-10"
+            />
+            <button
+              type="button"
+              onClick={handleAutoCategorize}
+              disabled={loadingAutoCat || !newTransaction.description || !hasApiKey}
+              className={`absolute right-2 top-2 ${!hasApiKey ? 'text-slate-400 opacity-50 cursor-not-allowed' : 'text-indigo-500 hover:text-indigo-700'} disabled:opacity-30`}
+            >
+              {loadingAutoCat ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
+            </button>
+          </div>
+          
+          <div className="flex flex-col gap-1">
+              <CurrencyInput
+                required
+                placeholder="Valor (R$)"
+                value={newTransaction.amount}
+                onChangeValue={val => setNewTransaction({ ...newTransaction, amount: val })}
+                className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2 outline-none"
+              />
+              
+              {/* DISCREET ALIMONY AND OTHER DEDUCTIONS OPTION */}
+              {newTransaction.type === 'income' && newTransaction.category === 'Salário' && (
+                  <div className="flex flex-col gap-3 mt-2 px-2 py-2 bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-100 dark:border-slate-700 animate-fade-in">
+                      
+                      {/* INSS */}
+                      <div className="flex flex-col gap-2">
+                          <div 
+                              className="flex items-center gap-2 cursor-pointer group select-none"
+                              onClick={() => setHasInss(!hasInss)}
+                          >
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${hasInss ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'}`}>
+                                  {hasInss && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                              </div>
+                              <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 group-hover:text-indigo-500 transition-colors flex items-center gap-1">
+                                  <Briefcase className="w-3.5 h-3.5" /> Desconto INSS?
+                              </span>
+                          </div>
+                          
+                          {hasInss && (
+                              <div className="flex items-center gap-2 animate-scale-in pl-5">
+                                  <input 
+                                      autoFocus
+                                      type="number" 
+                                      placeholder="%" 
+                                      className="w-16 py-1 px-2 text-xs border border-slate-300 rounded text-center outline-none focus:border-indigo-500 dark:bg-slate-700 dark:border-slate-600 dark:text-white font-bold"
+                                      value={inssPercentage}
+                                      onChange={(e) => setInssPercentage(e.target.value)}
+                                  />
+                                  <span className="text-[11px] text-slate-400 font-bold">%</span>
+                                  {inssPercentage && !isNaN(parseFloat(inssPercentage)) && !isNaN(parseFloat(newTransaction.amount)) && (
+                                      <span className="text-[11px] text-rose-500 font-medium">
+                                          - R$ {(parseFloat(newTransaction.amount) * (parseFloat(inssPercentage)/100)).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                      </span>
+                                  )}
+                              </div>
+                          )}
+                      </div>
+
+                      {/* OUTROS */}
+                      <div className="flex flex-col gap-2">
+                          <div 
+                              className="flex items-center gap-2 cursor-pointer group select-none"
+                              onClick={() => setHasOtherDeductions(!hasOtherDeductions)}
+                          >
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${hasOtherDeductions ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'}`}>
+                                  {hasOtherDeductions && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                              </div>
+                              <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 group-hover:text-indigo-500 transition-colors flex items-center gap-1">
+                                  <Layers className="w-3.5 h-3.5" /> Outros Descontos?
+                              </span>
+                          </div>
+                          
+                          {hasOtherDeductions && (
+                              <div className="flex items-center gap-2 animate-scale-in pl-5">
+                                  <input 
+                                      type="text" 
+                                      placeholder="Descrição (ex: Plano de Saúde)" 
+                                      className="flex-1 py-1 px-2 text-xs border border-slate-300 rounded outline-none focus:border-indigo-500 dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+                                      value={otherDeductionsDesc}
+                                      onChange={(e) => setOtherDeductionsDesc(e.target.value)}
+                                  />
+                                  <CurrencyInput 
+                                      placeholder="R$" 
+                                      className="w-24 py-1 px-2 text-xs border border-slate-300 rounded outline-none focus:border-indigo-500 dark:bg-slate-700 dark:border-slate-600 dark:text-white font-bold"
+                                      value={otherDeductionsAmount}
+                                      onChangeValue={(val) => setOtherDeductionsAmount(val)}
+                                  />
+                              </div>
+                          )}
+                      </div>
+
+                      {/* PENSÃO */}
+                      <div className="flex flex-col gap-2">
+                          <div 
+                              className="flex items-center gap-2 cursor-pointer group select-none"
+                              onClick={() => setHasAlimony(!hasAlimony)}
+                          >
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${hasAlimony ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'}`}>
+                                  {hasAlimony && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                              </div>
+                              <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 group-hover:text-indigo-500 transition-colors flex items-center gap-1">
+                                  <Baby className="w-3.5 h-3.5" /> Descontar Pensão?
+                              </span>
+                          </div>
+                          
+                          {hasAlimony && (
+                              <div className="flex items-center gap-2 animate-scale-in pl-5">
+                                  <input 
+                                      type="number" 
+                                      placeholder="%" 
+                                      className="w-16 py-1 px-2 text-xs border border-slate-300 rounded text-center outline-none focus:border-indigo-500 dark:bg-slate-700 dark:border-slate-600 dark:text-white font-bold"
+                                      value={alimonyPercentage}
+                                      onChange={(e) => setAlimonyPercentage(e.target.value)}
+                                  />
+                                  <span className="text-[11px] text-slate-400 font-bold">%</span>
+                                  {alimonyPercentage && !isNaN(parseFloat(alimonyPercentage)) && !isNaN(parseFloat(newTransaction.amount)) && (
+                                      <span className="text-[11px] text-rose-500 font-medium">
+                                          - R$ {(parseFloat(newTransaction.amount) * (parseFloat(alimonyPercentage)/100)).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                      </span>
+                                  )}
+                              </div>
+                          )}
+                      </div>
+
+                      {/* CONSIGNADO */}
+                      <div className="flex flex-col gap-2">
+                          <div 
+                              className="flex items-center gap-2 cursor-pointer group select-none"
+                              onClick={() => setHasConsignado(!hasConsignado)}
+                          >
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${hasConsignado ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'}`}>
+                                  {hasConsignado && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                              </div>
+                              <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 group-hover:text-indigo-500 transition-colors flex items-center gap-1">
+                                  <Banknote className="w-3.5 h-3.5" /> Consignado?
+                              </span>
+                          </div>
+                          
+                          {hasConsignado && (
+                              <div className="flex items-center gap-2 animate-scale-in pl-5">
+                                  <CurrencyInput 
+                                      placeholder="Valor R$" 
+                                      className="flex-1 py-1 px-2 text-xs border border-slate-300 rounded outline-none focus:border-indigo-500 dark:bg-slate-700 dark:border-slate-600 dark:text-white font-bold"
+                                      value={consignadoAmount}
+                                      onChangeValue={(val) => setConsignadoAmount(val)}
+                                  />
+                                  <input 
+                                      type="number" 
+                                      placeholder="Parcelas" 
+                                      className="w-20 py-1 px-2 text-xs border border-slate-300 rounded text-center outline-none focus:border-indigo-500 dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+                                      value={consignadoInstallments}
+                                      onChange={(e) => setConsignadoInstallments(e.target.value)}
+                                  />
+                              </div>
+                          )}
+                      </div>
+                  </div>
+              )}
+          </div>
+
+          <select
+            value={newTransaction.type}
+            onChange={handleTypeChange}
+            className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2"
+          >
+            <option value="expense">Despesa</option>
+            <option value="income">Receita</option>
+          </select>
+
+          <select
+            value={newTransaction.category}
+            onChange={e => setNewTransaction({ ...newTransaction, category: e.target.value })}
+            className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2"
+          >
+            {currentCategoryOptions.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+
+          <div>
+              <div className="flex gap-2">
+                <input
+                  required
+                  type="date"
+                  value={newTransaction.date}
+                  onChange={e => setNewTransaction({ ...newTransaction, date: e.target.value })}
+                  className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2 flex-1"
+                />
+                <input
+                  type="time"
+                  value={newTransaction.time || ''}
+                  onChange={e => setNewTransaction({ ...newTransaction, time: e.target.value })}
+                  className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2 w-auto"
+                />
+              </div>
+              
+              {/* BUSINESS DAY OPTION FOR SALARY - Moved here */}
+              {newTransaction.category === 'Salário' && newTransaction.type === 'income' && (
+                  <div className="flex items-center gap-2 p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800/30 animate-fade-in mt-2">
+                      <input 
+                          type="checkbox" 
+                          id="useBusinessDay"
+                          checked={useBusinessDay}
+                          onChange={(e) => setUseBusinessDay(e.target.checked)}
+                          className="w-3.5 h-3.5 text-emerald-600 rounded"
+                      />
+                      <label htmlFor="useBusinessDay" className="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1 cursor-pointer flex-1">
+                          <Briefcase className="w-3 h-3" /> Considerar dia útil?
+                      </label>
+                      
+                      {useBusinessDay && (
+                          <div className="flex items-center gap-1">
+                              <input 
+                                  type="number"
+                                  min="1"
+                                  max="20"
+                                  value={businessDayOrdinal}
+                                  onChange={(e) => setBusinessDayOrdinal(e.target.value)}
+                                  className="w-10 py-0.5 px-1 text-xs border border-emerald-300 rounded text-center outline-none focus:border-emerald-500 font-bold dark:bg-slate-700 dark:text-white"
+                              />
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">º dia</span>
+                          </div>
+                      )}
+                  </div>
+              )}
+          </div>
+
+          {/* Auto Pay Checkbox - always shown now since status is always pending initially */}
+          <div className="flex items-center gap-2 p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-800/30 animate-fade-in mt-1 md:col-span-2 md:mt-0">
+              <input 
+                  type="checkbox" 
+                  id="autoPay"
+                  checked={newTransaction.autoPay || false}
+                  onChange={(e) => setNewTransaction({...newTransaction, autoPay: e.target.checked})}
+                  className="w-4 h-4 text-indigo-600 rounded"
+              />
+              <label htmlFor="autoPay" className="text-xs font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1 cursor-pointer flex-1">
+                  <Zap className="w-3 h-3" /> Lançamento Automático na Data?
+              </label>
+          </div>
+
+          <select
+            value={newTransaction.paymentMethod}
+            onChange={e => setNewTransaction({ ...newTransaction, paymentMethod: e.target.value as PaymentMethod })}
+            className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2 md:col-span-2"
+          >
+            {currentPaymentMethods.map(method => (
+              <option key={method} value={method}>{PAYMENT_LABELS[method]}</option>
+            ))}
+          </select>
+
+          <div className="md:col-span-2">
+            <textarea
+                placeholder="Observações (opcional)"
+                value={newTransaction.observation}
+                onChange={e => setNewTransaction({ ...newTransaction, observation: e.target.value })}
+                className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2 w-full outline-none resize-none h-20 text-sm"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <div className="flex items-center gap-2 p-2 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg">
+               <input 
+                  type="checkbox" 
+                  id="recurring"
+                  checked={newTransaction.isRecurring}
+                  onChange={(e) => setNewTransaction({...newTransaction, isRecurring: e.target.checked})}
+                  className="w-4 h-4 text-indigo-600 rounded"
+               />
+               <label htmlFor="recurring" className="text-sm text-slate-700 dark:text-slate-200 font-medium flex items-center gap-1 cursor-pointer">
+                  <Repeat className="w-4 h-4 text-indigo-500" /> Assinatura / Recorrente / Parcelado
+               </label>
+            </div>
+
+            {newTransaction.isRecurring && (
+                <div className="mt-2 pl-2 md:pl-6 animate-fade-in space-y-3">
+                    {/* Recurrence Type Selector */}
+                    <div className="flex gap-2 mb-3">
+                       <button
+                          type="button"
+                          onClick={() => setRecurrenceMode('monthly')}
+                          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold border transition-colors ${recurrenceMode === 'monthly' ? 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800' : 'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'}`}
+                       >
+                          Mensal / Parcelado
+                       </button>
+                       <button
+                          type="button"
+                          onClick={() => setRecurrenceMode('days')}
+                          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold border transition-colors ${recurrenceMode === 'days' ? 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800' : 'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'}`}
+                       >
+                          Dias Específicos
+                       </button>
+                    </div>
+
+                    {recurrenceMode === 'monthly' ? (
+                        <div className="space-y-3">
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
+                                    Repetir por quantas vezes? (Opcional)
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <Layers className="w-4 h-4 text-slate-400" />
+                                    <input
+                                        type="number"
+                                        placeholder="Ex: 12 (Deixe vazio para assinatura infinita)"
+                                        value={newTransaction.installments}
+                                        onChange={e => setNewTransaction({...newTransaction, installments: e.target.value})}
+                                        className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2 text-sm w-full outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-2">
+                            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1">
+                                <CalendarDays className="w-3 h-3" /> Selecione os dias do mês
+                            </label>
+                            <div className="grid grid-cols-7 gap-2">
+                                {[...Array(31)].map((_, i) => {
+                                    const day = i + 1;
+                                    const isSelected = selectedDays.includes(day);
+                                    return (
+                                        <button
+                                            key={day}
+                                            type="button"
+                                            onClick={() => toggleDay(day)}
+                                            className={`h-8 rounded-md text-xs font-bold transition-all ${
+                                                isSelected 
+                                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30 transform scale-105' 
+                                                : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                                            }`}
+                                        >
+                                            {day}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-1">
+                                Uma transação será criada para cada dia selecionado neste mês.
+                            </p>
+                        </div>
+                    )}
+                </div>
+            )}
+          </div>
+
+          <div className="col-span-1 md:col-span-2 flex justify-end gap-2 mt-4 sticky bottom-0 bg-white/95 dark:bg-slate-800/95 pt-4 pb-2 border-t border-slate-100 dark:border-slate-700 z-10 w-full">
+            <button type="button" onClick={() => setIsFormOpen(false)} className="px-5 py-2.5 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
+              Cancelar
+            </button>
+            
+            {((editingId || editingGhostId) && (newTransaction.isRecurring || transactions.find(t => t.id === editingId)?.groupId || editingGhostId)) ? (
+                <>
+                    <button 
+                        type="button" 
+                        onClick={(e) => { editScopeRef.current = 'single'; handleSubmit(e); }}
+                        className="px-4 py-2.5 bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 font-bold transition-all"
+                    >
+                        Atualizar Apenas Esta
+                    </button>
+                    <button 
+                        type="button" 
+                        onClick={(e) => { editScopeRef.current = 'forward'; handleSubmit(e); }}
+                        className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold shadow-lg shadow-indigo-500/30 transition-all"
+                    >
+                        Atualizar Desta em Diante
+                    </button>
+                </>
+            ) : (
+                <button type="submit" className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold shadow-lg shadow-indigo-500/30 transition-all">
+                  {(editingId || editingGhostId) ? 'Atualizar' : 'Salvar'}
+                </button>
+            )}
+          </div>
+        </form>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. TABS (View Filter) */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-1 flex overflow-x-auto hide-scrollbar">
+          <button 
+              onClick={() => setViewFilter('all')}
+              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${viewFilter === 'all' ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+          >
+              <ListFilter className="w-4 h-4" /> Todas
+          </button>
+          <button 
+              onClick={() => setViewFilter('income')}
+              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${viewFilter === 'income' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+          >
+              <ArrowUpCircle className="w-4 h-4" /> Entradas
+          </button>
+          <button 
+              onClick={() => setViewFilter('expense')}
+              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${viewFilter === 'expense' ? 'bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+          >
+              <ArrowDownCircle className="w-4 h-4" /> Saídas
+          </button>
+          <button 
+              onClick={() => setViewFilter('late')}
+              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${viewFilter === 'late' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-400' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+          >
+              <AlertCircle className="w-4 h-4" /> Atrasadas
+          </button>
+          <button 
+              onClick={() => setViewFilter('fixed')}
+              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${viewFilter === 'fixed' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+          >
+              <Infinity className="w-4 h-4" /> Fixas
+          </button>
+      </div>
+
+      {/* 6. LIST AREA (Grouped by Date) */}
+      <div className="space-y-4 pb-20 md:pb-0">
+          {groupedTransactions.length === 0 ? (
+              <div className="text-center py-16 text-slate-400">
+                  <div className="bg-slate-100 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Search className="w-8 h-8 opacity-50" />
+                  </div>
+                  <p>Nenhuma transação encontrada.</p>
+                  <p className="text-xs mt-1">Tente mudar os filtros ou adicione uma nova.</p>
+              </div>
+          ) : (
+              groupedTransactions.map((group) => (
+                  <div key={group.date} className="animate-fade-in">
+                      {/* Date Header with Running Balance */}
+                      <div className="flex items-center justify-between px-3 py-2 mb-1 sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-lg border-b border-slate-100 dark:border-slate-800">
+                          <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                              <Calendar className="w-3 h-3" />
+                              {formatDateFriendly(group.date)}
+                          </h3>
+                          <div className="flex items-center gap-3">
+                              <span className={`text-xs font-bold ${group.total >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                                  {group.total !== 0 && (group.total > 0 ? '+' : '') + formatValue(group.total)}
+                              </span>
+                              <div className="h-4 w-px bg-slate-300 dark:bg-slate-700"></div>
+                              <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 flex items-center gap-1" title="Saldo acumulado até este dia">
+                                  <Sigma className="w-3 h-3" />
+                                  {formatValue(group.runningBalance)}
+                              </span>
+                          </div>
+                      </div>
+
+                      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
+                          {group.transactions.map((t, index) => {
+                              const showPaidSeparator = index === 0 && t.status === 'paid';
+                              const showPendingSeparator = (index === 0 && t.status === 'pending') || 
+                                                           (index > 0 && t.status === 'pending' && group.transactions[index - 1].status === 'paid');
+                              
+                              const isFirstInStatus = index === 0 || group.transactions[index - 1].status !== t.status;
+                              const isLastInStatus = index === group.transactions.length - 1 || group.transactions[index + 1].status !== t.status;
+
+                              return (
+                                  <React.Fragment key={t.id}>
+                                      {showPaidSeparator && (
+                                          <div className="bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 border-b border-emerald-100 dark:border-emerald-800/50 flex items-center gap-2">
+                                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Pagos</span>
+                                          </div>
+                                      )}
+                                      {showPendingSeparator && (
+                                          <div className={`px-3 py-1.5 border-b flex items-center gap-2 ${group.date < todayStr ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-100 dark:border-rose-800/50' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/50'}`}>
+                                              <Clock className={`w-3.5 h-3.5 ${group.date < todayStr ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`} />
+                                              <span className={`text-xs font-bold uppercase tracking-wider ${group.date < todayStr ? 'text-rose-700 dark:text-rose-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                                                  {group.date < todayStr ? 'Atrasadas' : 'Pendentes'}
+                                              </span>
+                                          </div>
+                                      )}
+                                      <div className={`group hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${t.isGhost ? 'opacity-50 grayscale' : ''}`}>
+                                          
+                                          {/* --- MOBILE VIEW (< md) --- */}
+                                          <div className="md:hidden p-4 flex items-center gap-3 relative">
+                                              {/* Icon Box */}
+                                              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                                                  t.type === 'income' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30' : 'bg-rose-100 text-rose-600 dark:bg-rose-900/30'
+                                              }`}>
+                                                  {t.type === 'income' ? <ArrowUpCircle className="w-5 h-5" /> : <ArrowDownCircle className="w-5 h-5" />}
+                                              </div>
+
+                                              {/* Main Content */}
+                                              <div className="flex-1 min-w-0" onClick={() => !t.isGhost && handleEdit(t)}>
+                                                  <div className="flex justify-between items-start">
+                                                      <h4 className="font-bold text-slate-800 dark:text-white truncate pr-2 text-sm">{t.description}</h4>
+                                                      <span 
+                                                          className={`font-bold text-sm whitespace-nowrap ${t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-200'}`}
+                                                          onClick={(e) => !t.isGhost && handleInlineEditStart(e, t)}
+                                                      >
+                                                          {inlineEditingId === t.id ? (
+                                                              <CurrencyInput 
+                                                                  value={inlineEditingAmount}
+                                                                  onChangeValue={(val) => setInlineEditingAmount(val)}
+                                                                  onBlur={() => handleInlineEditSave(t)}
+                                                                  onKeyDown={(e) => { if (e.key === 'Enter') handleInlineEditSave(t); }}
+                                                                  className="w-20 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-0.5 text-right text-sm text-slate-900 dark:text-white"
+                                                                  autoFocus
+                                                                  onClick={(e: React.MouseEvent<HTMLInputElement>) => e.stopPropagation()}
+                                                              />
+                                                          ) : (
+                                                              <>{t.type === 'expense' && '- '}{formatValue(t.amount)}</>
+                                                          )}
+                                                      </span>
+                                                  </div>
+                                                  
+                                                  <div className="flex justify-between items-center mt-1">
+                                                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${getCategoryStyle(t.category)}`}>
+                                                              {t.category}
+                                                          </span>
+                                                          {t.isRecurring && (
+                                                              <span className="flex items-center gap-0.5 text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded" title="Recorrente Infinito">
+                                                                  <Infinity className="w-3 h-3" /> 
+                                                                  Fixo
+                                                              </span>
+                                                          )}
+                                                          {t.status === 'pending' && t.autoPay && (
+                                                              <span className="flex items-center gap-0.5 text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded" title="Lançamento Automático">
+                                                                  <Zap className="w-3 h-3" /> Auto
+                                                              </span>
+                                                          )}
+                                                          {t.status === 'pending' && t.date < todayStr && (
+                                                              <span className="flex items-center gap-0.5 text-rose-600 bg-rose-50 dark:bg-rose-900/30 px-1.5 py-0.5 rounded" title="Atrasada">
+                                                                  <AlertCircle className="w-3 h-3" /> Atrasada
+                                                              </span>
+                                                          )}
+                                                          {t.time && (
+                                                              <span className="flex items-center gap-0.5 text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded font-bold" title="Horário">
+                                                                  <Clock className="w-3 h-3" /> {t.time}
+                                                              </span>
+                                                          )}
+                                                      </div>
+                                                  </div>
+                                                  
+                                                  {t.observation && (
+                                                      <p className="text-[10px] text-slate-400 mt-1 italic truncate flex items-center gap-1">
+                                                          <StickyNote className="w-3 h-3" /> {t.observation}
+                                                      </p>
+                                                  )}
+                                              </div>
+
+                                              {/* Actions */}
+                                              <div className="flex flex-col items-center gap-1 pl-2 border-l border-slate-100 dark:border-slate-700">
+                                                  <div className="flex items-center gap-1">
+                                                      <button 
+                                                          onClick={() => handleMoveTransaction(group.date, index, 'up')}
+                                                          disabled={isFirstInStatus}
+                                                          className={`p-1 rounded ${isFirstInStatus ? 'text-slate-200 dark:text-slate-700' : 'text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                                                      >
+                                                          <ChevronUp className="w-4 h-4" />
+                                                      </button>
+                                                      <button 
+                                                          onClick={() => handleMoveTransaction(group.date, index, 'down')}
+                                                          disabled={isLastInStatus}
+                                                          className={`p-1 rounded ${isLastInStatus ? 'text-slate-200 dark:text-slate-700' : 'text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                                                      >
+                                                          <ChevronDown className="w-4 h-4" />
+                                                      </button>
+                                                  </div>
+                                                  <div className="flex items-center gap-1">
+                                                      <button 
+                                                          onClick={() => !t.isGhost && handleToggleClick(t)}
+                                                          disabled={t.isGhost}
+                                                          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                                                              t.status === 'paid' 
+                                                              ? 'bg-emerald-500 border-emerald-500 text-white' 
+                                                              : 'border-slate-300 dark:border-slate-500 text-transparent hover:border-emerald-400'
+                                                          } ${t.isGhost ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                      >
+                                                          <CheckCircle className="w-3.5 h-3.5" />
+                                                      </button>
+                                                      <button onClick={() => handleEdit(t)} className="p-1.5 text-slate-400 hover:text-indigo-500 rounded hover:bg-slate-100 dark:hover:bg-slate-700">
+                                                            <Pencil className="w-4 h-4" />
+                                                      </button>
+                                                      {!t.isGhost && (
+                                                          <>
+                                                              <button onClick={() => onDelete(t.id)} className="p-1.5 text-slate-400 hover:text-rose-500 rounded hover:bg-slate-100 dark:hover:bg-slate-700">
+                                                                    <Trash2 className="w-4 h-4" />
+                                                              </button>
+                                                          </>
+                                                      )}
+                                                  </div>
+                                              </div>
+                                          </div>
+
+                                          {/* --- DESKTOP TABLE ROW (>= md) --- */}
+                                          <div className="hidden md:flex items-center gap-4 p-3 text-sm">
+                                              {/* Icon */}
+                                              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                                                  t.type === 'income' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30' : 'bg-rose-100 text-rose-600 dark:bg-rose-900/30'
+                                              }`}>
+                                                  {t.type === 'income' ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
+                                              </div>
+
+                                              {/* Display Mode */}
+                                              <>
+                                                  {/* Date (Day) */}
+                                                  <div className="w-8 text-center font-bold text-slate-400 text-xs">
+                                                      {parseInt(t.date.split('-')[2])}
+                                                  </div>
+
+                                                  {/* Category */}
+                                                  <div className="w-24 shrink-0">
+                                                      <span className={`px-2 py-1 rounded text-[10px] font-medium border block text-center truncate ${getCategoryStyle(t.category)}`}>
+                                                          {t.category}
+                                                      </span>
+                                                  </div>
+
+                                                  {/* Description */}
+                                                  <div 
+                                                      className={`flex-1 font-medium text-slate-700 dark:text-slate-200 truncate flex flex-col justify-center ${t.isGhost ? 'cursor-default' : 'cursor-pointer hover:text-indigo-500'}`}
+                                                      onClick={() => !t.isGhost && handleEdit(t)}
+                                                      title={t.isGhost ? "Lançamento Futuro" : "Clique para editar"}
+                                                  >
+                                                      <div className="flex items-center gap-2">
+                                                          {t.description}
+                                                          {t.isRecurring && (
+                                                              <span className="text-[10px] text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded flex items-center gap-0.5" title="Recorrência Infinita">
+                                                                  <Infinity className="w-3 h-3" /> Recorrente
+                                                              </span>
+                                                          )}
+                                                          {t.status === 'pending' && t.autoPay && (
+                                                              <span className="text-[10px] text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded flex items-center gap-0.5" title="Lançamento Automático">
+                                                                  <Zap className="w-3 h-3" /> Auto
+                                                              </span>
+                                                          )}
+                                                          {t.status === 'pending' && t.date < todayStr && (
+                                                              <span className="text-[10px] text-rose-600 bg-rose-50 dark:bg-rose-900/30 px-1.5 py-0.5 rounded flex items-center gap-0.5" title="Atrasada">
+                                                                  <AlertCircle className="w-3 h-3" /> Atrasada
+                                                              </span>
+                                                          )}
+                                                          {t.time && (
+                                                              <span className="text-[10px] text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded flex items-center gap-0.5 font-bold" title="Horário">
+                                                                  <Clock className="w-3 h-3" /> {t.time}
+                                                              </span>
+                                                          )}
+                                                      </div>
+                                                      {t.observation && <span className="text-[10px] text-slate-400 font-normal truncate max-w-[300px]">{t.observation}</span>}
+                                                  </div>
+
+                                                  {/* Payment Method & Wallet */}
+                                                  <div className="w-32 text-xs text-slate-500 flex flex-col justify-center">
+                                                      <div className="flex items-center gap-1" title="Forma de Pagamento">
+                                                          <PaymentIcon method={t.paymentMethod || ''} className="w-3 h-3" />
+                                                          <span className="truncate">{PAYMENT_LABELS[t.paymentMethod || ''] || '-'}</span>
+                                                      </div>
+                                                      {t.walletId && (
+                                                          <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-400" title="Conta/Carteira">
+                                                              <Wallet className="w-2.5 h-2.5" />
+                                                              <span className="truncate">
+                                                                  {wallets.find(w => w.id === t.walletId)?.name || 'Conta apagada'}
+                                                              </span>
+                                                          </div>
+                                                      )}
+                                                  </div>
+
+                                                  {/* Amount */}
+                                                  <div 
+                                                      className={`w-28 text-right font-bold ${t.isGhost ? 'cursor-default' : 'cursor-pointer hover:text-indigo-500'} ${t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200'}`}
+                                                      onClick={(e) => !t.isGhost && handleInlineEditStart(e, t)}
+                                                  >
+                                                      {inlineEditingId === t.id ? (
+                                                          <CurrencyInput 
+                                                              value={inlineEditingAmount}
+                                                              onChangeValue={(val) => setInlineEditingAmount(val)}
+                                                              onBlur={() => handleInlineEditSave(t)}
+                                                              onKeyDown={(e) => { if (e.key === 'Enter') handleInlineEditSave(t); }}
+                                                              className="w-24 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-0.5 text-right text-sm text-slate-900 dark:text-white"
+                                                              autoFocus
+                                                              onClick={(e) => e.stopPropagation()}
+                                                          />
+                                                      ) : (
+                                                          formatValue(t.amount)
+                                                      )}
+                                                  </div>
+
+                                                  {/* Status */}
+                                                  <div className="w-8 flex justify-center">
+                                                      <button 
+                                                          onClick={() => !t.isGhost && handleToggleClick(t)}
+                                                          disabled={t.isGhost}
+                                                          className={`transition-all hover:scale-110 ${
+                                                              t.status === 'paid' 
+                                                              ? 'text-emerald-500' 
+                                                              : 'text-slate-300 hover:text-emerald-400'
+                                                          } ${t.isGhost ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                          title={t.isGhost ? "Lançamento Futuro" : (t.status === 'paid' ? 'Marcar como pendente' : 'Marcar como pago')}
+                                                      >
+                                                          <CheckCircle className="w-5 h-5" />
+                                                      </button>
+                                                  </div>
+
+                                                  {/* Actions */}
+                                                  <div className="w-24 flex justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                                      <div className="flex flex-col mr-1">
+                                                          <button 
+                                                              onClick={() => handleMoveTransaction(group.date, index, 'up')}
+                                                              disabled={isFirstInStatus || t.isGhost}
+                                                              className={`p-0.5 rounded ${isFirstInStatus || t.isGhost ? 'text-slate-200 dark:text-slate-700' : 'text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                                                          >
+                                                              <ChevronUp className="w-3 h-3" />
+                                                          </button>
+                                                          <button 
+                                                              onClick={() => handleMoveTransaction(group.date, index, 'down')}
+                                                              disabled={isLastInStatus || t.isGhost}
+                                                              className={`p-0.5 rounded ${isLastInStatus || t.isGhost ? 'text-slate-200 dark:text-slate-700' : 'text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                                                          >
+                                                              <ChevronDown className="w-3 h-3" />
+                                                          </button>
+                                                      </div>
+                                                      <button onClick={() => handleEdit(t)} className="p-1.5 text-slate-400 hover:text-indigo-500 rounded hover:bg-slate-100 dark:hover:bg-slate-700">
+                                                          <Pencil className="w-4 h-4" />
+                                                      </button>
+                                                      {!t.isGhost && (
+                                                          <>
+                                                              <button onClick={() => onDelete(t.id)} className="p-1.5 text-slate-400 hover:text-rose-500 rounded hover:bg-slate-100 dark:hover:bg-slate-700">
+                                                                  <Trash2 className="w-4 h-4" />
+                                                              </button>
+                                                          </>
+                                                      )}
+                                                  </div>
+                                              </>
+                                          </div>
+                                      </div>
+                                  </React.Fragment>
+                              );
+                          })}
+                      </div>
+                  </div>
+              ))
+          )}
+      </div>
+
+      {/* Floating Add Button (All Screens) */}
+      <button 
+          onClick={() => { resetForm(); setIsFormOpen(true); }}
+          className="fixed bottom-20 right-4 md:bottom-8 md:right-8 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-lg shadow-indigo-600/40 flex items-center justify-center z-40 hover:bg-indigo-700 hover:scale-110 active:scale-95 transition-all"
+          title="Nova Transação"
+      >
+          <Plus className="w-7 h-7" />
+      </button>
+
+    </div>
+  );
+};

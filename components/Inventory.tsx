@@ -22,17 +22,18 @@ import {
   Sparkles,
   RefreshCw
 } from 'lucide-react';
-import { InventoryItem, ShoppingCategory, ReplenishmentLog } from '../types';
+import { InventoryItem, ShoppingCategory, ReplenishmentLog, ShoppingItem } from '../types';
 
 interface InventoryProps {
   items: InventoryItem[];
   replenishmentLogs?: ReplenishmentLog[];
+  shoppingList?: ShoppingItem[];
   onAdd: (item: Omit<InventoryItem, 'id'>) => void;
   onUpdate: (id: string, updates: Partial<InventoryItem>) => void;
   onDelete: (id: string) => void;
   onAddReplenishmentLog: (log: Omit<ReplenishmentLog, 'id'>) => void;
   onClearReplenishmentHistory: () => void;
-  onAddToShoppingList: (item: { name: string; category: any; unit: string; quantity: number }) => void;
+  onAddToShoppingList: (item: { name: string; category: any; unit: string; quantity: number; month?: string }) => void;
   privacyMode: boolean;
 }
 
@@ -41,24 +42,17 @@ const CATEGORIES: ShoppingCategory[] = [
 ];
 
 export const getStockStatusDetails = (item: InventoryItem) => {
-  const persistedMonths = item.persistedMonthsCount || 0;
-  if (persistedMonths >= 2 && item.quantity > 0) {
-    return {
-      label: "Diminuir estoque",
-      classes: "text-amber-700 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/30",
-      description: "Persistente no estoque há pelo menos 2 meses. Recomendado diminuir quantidade comprada."
-    };
-  } else if (item.minQuantity !== undefined && item.quantity <= item.minQuantity) {
+  if (item.minQuantity !== undefined && item.quantity < item.minQuantity) {
     return {
       label: "Aumentar estoque",
       classes: "text-rose-700 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/30",
-      description: "Nível abaixo do mínimo ideal."
+      description: "Nível abaixo do mínimo configurado."
     };
   } else {
     return {
       label: "Estoque está bom",
       classes: "text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/30",
-      description: "Estoque adequado para as necessidades."
+      description: "Estoque adequado ou acima do mínimo."
     };
   }
 };
@@ -66,6 +60,7 @@ export const getStockStatusDetails = (item: InventoryItem) => {
 export const Inventory: React.FC<InventoryProps> = ({
   items = [],
   replenishmentLogs = [],
+  shoppingList = [],
   onAdd,
   onUpdate,
   onDelete,
@@ -75,6 +70,101 @@ export const Inventory: React.FC<InventoryProps> = ({
   privacyMode
 }) => {
   const [activeTab, setActiveTab] = useState<'stock' | 'history'>('stock');
+
+  // Lançar para lista de compras (Modal & Lógica)
+  const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
+  const [selectedLaunchMonth, setSelectedLaunchMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
+  const [launchResultModal, setLaunchResultModal] = useState<{
+    isOpen: boolean;
+    messages: string[];
+    addedCount: number;
+    skippedCount: number;
+    monthLabel: string;
+  } | null>(null);
+
+  const getMonthsFromCurrentYear = () => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0 to 11
+    const monthNames = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    const list: { label: string; value: string }[] = [];
+    for (let m = currentMonth; m <= 11; m++) {
+      const monthStr = `${currentYear}-${String(m + 1).padStart(2, '0')}`;
+      list.push({
+        label: `${monthNames[m]} de ${currentYear}`,
+        value: monthStr
+      });
+    }
+    return list;
+  };
+
+  const handleLaunchToShoppingList = () => {
+    const months = getMonthsFromCurrentYear();
+    const monthObj = months.find(m => m.value === selectedLaunchMonth) || { label: selectedLaunchMonth };
+    const monthLabel = monthObj.label;
+
+    const messages: string[] = [];
+    let addedCount = 0;
+    let skippedCount = 0;
+
+    const itemsNeedingReplenishment = items.filter(item => {
+      const minQty = Number(item.minQuantity) || 0;
+      const currentQty = Number(item.quantity) || 0;
+      return minQty > currentQty;
+    });
+
+    if (itemsNeedingReplenishment.length === 0) {
+      messages.push("Todos os produtos do seu estoque já estão com a quantidade atual igual ou superior à quantidade mínima configurada. Nenhum item precisou ser lançado na lista de compras.");
+    } else {
+      const currentMonthStr = new Date().toISOString().slice(0, 7);
+
+      itemsNeedingReplenishment.forEach(item => {
+        const minQty = Number(item.minQuantity) || 0;
+        const currentQty = Number(item.quantity) || 0;
+        const neededQty = minQty - currentQty;
+
+        const existingInMonth = shoppingList.filter(s => {
+          const sMonth = s.month || currentMonthStr;
+          return sMonth === selectedLaunchMonth && s.name.trim().toLowerCase() === item.name.trim().toLowerCase();
+        });
+
+        const existingQty = existingInMonth.reduce((acc, s) => acc + (Number(s.quantity) || 0), 0);
+
+        if (existingQty >= neededQty) {
+          skippedCount++;
+          messages.push(`• "${item.name}": Já existem a quantidade de ${existingQty} ou mais produtos lançados na lista de compras de ${monthLabel}.`);
+        } else {
+          const toAdd = neededQty - existingQty;
+          onAddToShoppingList({
+            name: item.name,
+            category: item.category as ShoppingCategory,
+            unit: item.unit || 'un',
+            quantity: toAdd,
+            month: selectedLaunchMonth
+          });
+          addedCount++;
+
+          if (existingQty === 0) {
+            messages.push(`• "${item.name}": Lançado(s) ${neededQty} ${item.unit} na lista de compras de ${monthLabel}.`);
+          } else {
+            messages.push(`• "${item.name}": Já existiam ${existingQty} ${item.unit} na lista; adicionado saldo de +${toAdd} ${item.unit} em ${monthLabel}.`);
+          }
+        }
+      });
+    }
+
+    setIsLaunchModalOpen(false);
+    setLaunchResultModal({
+      isOpen: true,
+      messages,
+      addedCount,
+      skippedCount,
+      monthLabel
+    });
+  };
   
   // Stock list state
   const [searchTerm, setSearchTerm] = useState('');
@@ -210,7 +300,7 @@ export const Inventory: React.FC<InventoryProps> = ({
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
     
-    const needsReplenish = item.minQuantity !== undefined && item.quantity <= item.minQuantity;
+    const needsReplenish = item.minQuantity !== undefined && item.quantity < item.minQuantity;
     const matchesReplenish = filterReplenish === null || (filterReplenish === needsReplenish);
 
     return matchesSearch && matchesCategory && matchesReplenish;
@@ -241,7 +331,7 @@ export const Inventory: React.FC<InventoryProps> = ({
   ).sort((a, b) => b.localeCompare(a));
 
   const totalItems = items.length;
-  const itemsLow = items.filter(item => item.minQuantity !== undefined && item.quantity <= item.minQuantity).length;
+  const itemsLow = items.filter(item => item.minQuantity !== undefined && item.quantity < item.minQuantity).length;
 
   // Analysis / Recommendation Logic for adjusting next month's shopping quantities
   const getPlanningSuggestions = () => {
@@ -289,7 +379,7 @@ export const Inventory: React.FC<InventoryProps> = ({
         status = 'decrease';
       }
       // 1. Stock is empty/low despite some replenishment -> shortage risk
-      else if (current <= minQty && totalReplenished > 0) {
+      else if (current < minQty && totalReplenished > 0) {
         recommendation = `Falta Detectada: Você repôs ${totalReplenished} ${invItem.unit} este mês, mas o estoque continua muito baixo (${current} ${invItem.unit}). Sugerimos aumentar a quantidade de compra para o próximo mês em pelo menos 20-30%.`;
         status = 'increase';
       }
@@ -299,7 +389,7 @@ export const Inventory: React.FC<InventoryProps> = ({
         status = 'decrease';
       }
       // 3. Stock is empty and no replenishment recorded
-      else if (current <= minQty && totalReplenished === 0) {
+      else if (current < minQty && totalReplenished === 0) {
         recommendation = `Pendente: Este item está abaixo do mínimo ideal e não teve nenhuma reposição registrada. Adicione à sua lista de compras.`;
         status = 'increase';
       }
@@ -310,7 +400,7 @@ export const Inventory: React.FC<InventoryProps> = ({
       }
 
       // Only add to suggestions if there was active replenishment, if it is low on stock, or if it persisted
-      if (totalReplenished > 0 || current <= minQty || (persistedMonths >= 2 && current > 0)) {
+      if (totalReplenished > 0 || current < minQty || (persistedMonths >= 2 && current > 0)) {
         suggestionList.push({
           itemName: invItem.name,
           category: invItem.category,
@@ -350,13 +440,25 @@ export const Inventory: React.FC<InventoryProps> = ({
             Monitore o estoque de itens da sua casa, registre o histórico de reposições e ajuste suas compras do mês.
           </p>
         </div>
-        <button 
-          onClick={handleOpenAddModal}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-lg shadow-indigo-600/20 transition-all text-xs"
-        >
-          <PlusCircle className="w-4 h-4" />
-          Novo Item no Estoque
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button 
+            onClick={() => {
+              setSelectedLaunchMonth(new Date().toISOString().slice(0, 7));
+              setIsLaunchModalOpen(true);
+            }}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-lg shadow-emerald-600/20 transition-all text-xs cursor-pointer"
+          >
+            <ShoppingCart className="w-4 h-4" />
+            Lançar para lista de compras
+          </button>
+          <button 
+            onClick={handleOpenAddModal}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-lg shadow-indigo-600/20 transition-all text-xs cursor-pointer"
+          >
+            <PlusCircle className="w-4 h-4" />
+            Novo Item no Estoque
+          </button>
+        </div>
       </div>
 
       {/* Navigation Tabs */}
@@ -572,7 +674,7 @@ export const Inventory: React.FC<InventoryProps> = ({
 
                       {/* Actions */}
                       <div className="flex items-center gap-1.5">
-                        {(item.minQuantity !== undefined && item.quantity <= item.minQuantity) && (
+                        {(item.minQuantity !== undefined && item.quantity < item.minQuantity) && (
                           <button
                             onClick={() => handleAddBackToShopping(item)}
                             title="Adicionar à lista de compras para reposição"
@@ -855,7 +957,6 @@ export const Inventory: React.FC<InventoryProps> = ({
                     <option value="cx">CX</option>
                     <option value="pct">PCT</option>
                     <option value="L">L</option>
-                    <option value="ml">ML</option>
                   </select>
                 </div>
               </div>
@@ -920,6 +1021,199 @@ export const Inventory: React.FC<InventoryProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal - Lançar para Lista de Compras */}
+      {isLaunchModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-lg overflow-hidden border border-slate-200 dark:border-slate-700 shadow-2xl animate-scale-up">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-900/30">
+              <h3 className="text-base font-black text-slate-800 dark:text-white flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                Lançar para Lista de Compras
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsLaunchModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2">
+                  Selecione para qual mês deseja lançar os itens faltantes:
+                </label>
+                <select
+                  value={selectedLaunchMonth}
+                  onChange={(e) => setSelectedLaunchMonth(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-3 px-4 text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  {getMonthsFromCurrentYear().map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Lista de Prévia de Itens que necessitam de reposição */}
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-200/60 dark:border-slate-700/60">
+                <h4 className="text-xs font-black text-slate-800 dark:text-white mb-3 flex items-center justify-between">
+                  <span>Itens abaixo da quantidade ideal no estoque:</span>
+                  <span className="text-[10px] text-slate-500 font-semibold">
+                    {items.filter(i => (Number(i.minQuantity) || 0) > Number(i.quantity || 0)).length} item(s)
+                  </span>
+                </h4>
+
+                <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                  {items.filter(i => (Number(i.minQuantity) || 0) > Number(i.quantity || 0)).length === 0 ? (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 py-3 text-center italic">
+                      Todos os seus itens de estoque já atingiram ou superaram a quantidade ideal configurada.
+                    </p>
+                  ) : (
+                    items
+                      .filter(i => (Number(i.minQuantity) || 0) > Number(i.quantity || 0))
+                      .map(item => {
+                        const minQty = Number(item.minQuantity) || 0;
+                        const currentQty = Number(item.quantity) || 0;
+                        const neededQty = minQty - currentQty;
+                        const currentMonthStr = new Date().toISOString().slice(0, 7);
+
+                        const existingInMonth = shoppingList.filter(s => {
+                          const sMonth = s.month || currentMonthStr;
+                          return (
+                            sMonth === selectedLaunchMonth &&
+                            s.name.trim().toLowerCase() === item.name.trim().toLowerCase()
+                          );
+                        });
+
+                        const existingQty = existingInMonth.reduce(
+                          (acc, s) => acc + (Number(s.quantity) || 0),
+                          0
+                        );
+
+                        return (
+                          <div
+                            key={item.id}
+                            className="bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between gap-2 text-xs"
+                          >
+                            <div>
+                              <span className="font-bold text-slate-800 dark:text-white block">
+                                {item.name}
+                              </span>
+                              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                Em estoque: <b>{currentQty}</b> / Mínimo ideal: <b>{minQty}</b> (Falta <b>{neededQty} {item.unit}</b>)
+                              </span>
+                            </div>
+
+                            <div className="shrink-0 text-right">
+                              {existingQty >= neededQty ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-900/50">
+                                  Já existe na lista ({existingQty} {item.unit})
+                                </span>
+                              ) : existingQty === 0 ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-900/50">
+                                  Lançar: {neededQty} {item.unit}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-1 rounded-lg border border-indigo-200 dark:border-indigo-900/50">
+                                  Lançar saldo: +{neededQty - existingQty} {item.unit}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-3 border-t border-slate-100 dark:border-slate-700/50">
+                <button
+                  type="button"
+                  onClick={() => setIsLaunchModalOpen(false)}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-white font-bold text-xs transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLaunchToShoppingList}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-lg shadow-emerald-600/20"
+                >
+                  Lançar na Lista de Compras
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal - Resultado do Lançamento */}
+      {launchResultModal && launchResultModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-lg overflow-hidden border border-slate-200 dark:border-slate-700 shadow-2xl animate-scale-up">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-900/30">
+              <h3 className="text-base font-black text-slate-800 dark:text-white flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                Resumo do Lançamento — {launchResultModal.monthLabel}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setLaunchResultModal(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 rounded-2xl p-3">
+                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">
+                    Produtos Adicionados
+                  </span>
+                  <span className="text-xl font-black text-emerald-800 dark:text-emerald-300">
+                    {launchResultModal.addedCount}
+                  </span>
+                </div>
+
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-3">
+                  <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">
+                    Já na Lista
+                  </span>
+                  <span className="text-xl font-black text-amber-800 dark:text-amber-300">
+                    {launchResultModal.skippedCount}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-200/60 dark:border-slate-700/60 max-h-60 overflow-y-auto space-y-2 text-xs">
+                {launchResultModal.messages.map((msg, index) => (
+                  <div
+                    key={index}
+                    className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/40 dark:border-slate-700/40 text-slate-700 dark:text-slate-300"
+                  >
+                    {msg}
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setLaunchResultModal(null)}
+                  className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors shadow-lg shadow-indigo-600/20"
+                >
+                  Concluir
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

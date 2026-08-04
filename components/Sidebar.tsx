@@ -24,6 +24,8 @@ import {
   Heart,
   X,
   ShoppingCart,
+  Package,
+  Sparkles,
   Github,
   Linkedin,
   Copy,
@@ -112,24 +114,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { isActive, timeLeft, openModal, focusReason } = useFocus();
 
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
+    compras: true,
+    financeiro: false,
     planejamento: false,
-    utilidades: false,
+    saude: false,
   });
 
-  const toggleMenu = (menu: string) =>
+  const toggleMenu = (menu: string, defaultView?: View) => {
     setOpenMenus((prev) => {
-      if (prev[menu]) {
-        // Se já está aberto, apenas fecha
-        return { ...prev, [menu]: false };
-      }
-      // Se vai abrir, fecha os outros
+      const isOpen = prev[menu] ?? false;
       return {
-        planejamento: false,
-        financeiro: false,
-        utilidades: false,
-        [menu]: true,
+        ...prev,
+        [menu]: !isOpen,
       };
     });
+    if (defaultView && currentView !== defaultView) {
+      handleNavClick(defaultView);
+    }
+  };
 
   const handleNavClick = (view: View) => {
     onNavigate(view);
@@ -178,15 +180,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     View.PIX_KEYS,
   ].includes(currentView);
   
+  const isComprasActive = [
+    View.SHOPPING_LIST,
+    View.INVENTORY,
+    View.KANBAN,
+  ].includes(currentView);
+
   const isProductivityActive = [
     View.PLANEJAMENTO_DASHBOARD,
-    View.KANBAN,
     View.NOTES,
     View.PRODUCTIVITY,
     View.WORK_GOALS,
-    View.SHOPPING_LIST,
     View.PASSWORDS,
-    View.INVENTORY
   ].includes(currentView);
   const isSaudeActive = [
     View.SAUDE_DASHBOARD,
@@ -280,26 +285,297 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label="Agenda"
         />
 
-        <NavItem
-          active={isFinanceiroActive}
-          onClick={() => handleNavClick(View.TRANSACTIONS)}
-          icon={Landmark}
-          label="Financeiro"
-        />
+        {/* Financeiro */}
+        <div className="space-y-1">
+          <button
+            onClick={() => toggleMenu("financeiro", View.TRANSACTIONS)}
+            className={`flex w-full items-center justify-between px-3 py-2.5 rounded-xl transition-all text-xs font-bold ${
+              isFinanceiroActive
+                ? "bg-blue-600/20 text-blue-300 border border-blue-500/40 shadow-sm"
+                : "text-slate-400 hover:bg-slate-800/80 hover:text-white"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-1.5 rounded-lg ${isFinanceiroActive ? 'bg-blue-600 text-white' : 'bg-blue-500/10 text-blue-400'}`}>
+                <Landmark className="w-4 h-4" />
+              </div>
+              <span>Financeiro</span>
+            </div>
+            {(openMenus.financeiro ?? isFinanceiroActive) ? (
+              <ChevronDown className="w-4 h-4 text-slate-400" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-slate-400" />
+            )}
+          </button>
 
-        <NavItem
-          active={isProductivityActive}
-          onClick={() => handleNavClick(View.PRODUCTIVITY)}
-          icon={Target}
-          label="Planejamento"
-        />
+          {(openMenus.financeiro ?? isFinanceiroActive) && (
+            <div className="pl-4 space-y-1 py-1 border-l-2 border-blue-500/30 ml-4">
+              <button
+                onClick={() => handleNavClick(View.TRANSACTIONS)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.TRANSACTIONS
+                    ? "bg-blue-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Receipt className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
+                <span>Transações</span>
+              </button>
 
-        <NavItem
-          active={isSaudeActive}
-          onClick={() => handleNavClick(View.TREINO)}
-          icon={Activity}
-          label="Saúde"
-        />
+              <button
+                onClick={() => handleNavClick(View.SUBSCRIPTIONS)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.SUBSCRIPTIONS
+                    ? "bg-blue-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Repeat className="w-3.5 h-3.5 shrink-0 text-purple-400" />
+                <span>Assinaturas</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.DEBTS)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.DEBTS
+                    ? "bg-blue-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+                <span>Dívidas</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.INVESTMENTS)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.INVESTMENTS
+                    ? "bg-blue-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <LineChart className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                <span>Investimentos</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.BUDGETS)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.BUDGETS
+                    ? "bg-blue-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Target className="w-3.5 h-3.5 shrink-0 text-sky-400" />
+                <span>Orçamentos</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.WEALTH_PLANNER)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.WEALTH_PLANNER
+                    ? "bg-blue-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Landmark className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                <span>Aposentadoria</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.PIX_KEYS)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.PIX_KEYS
+                    ? "bg-blue-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Key className="w-3.5 h-3.5 shrink-0 text-teal-400" />
+                <span>Pix</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Compras */}
+        <div className="space-y-1">
+          <button
+            onClick={() => toggleMenu("compras", View.SHOPPING_LIST)}
+            className={`flex w-full items-center justify-between px-3 py-2.5 rounded-xl transition-all text-xs font-bold ${
+              isComprasActive
+                ? "bg-amber-600/20 text-amber-300 border border-amber-500/40 shadow-sm"
+                : "text-slate-400 hover:bg-slate-800/80 hover:text-white"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-1.5 rounded-lg ${isComprasActive ? 'bg-amber-600 text-white' : 'bg-amber-500/10 text-amber-400'}`}>
+                <ShoppingCart className="w-4 h-4" />
+              </div>
+              <span>Compras</span>
+            </div>
+            {(openMenus.compras ?? isComprasActive) ? (
+              <ChevronDown className="w-4 h-4 text-slate-400" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-slate-400" />
+            )}
+          </button>
+
+          {(openMenus.compras ?? isComprasActive) && (
+            <div className="pl-4 space-y-1 py-1 border-l-2 border-amber-500/30 ml-4">
+              <button
+                onClick={() => handleNavClick(View.SHOPPING_LIST)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.SHOPPING_LIST
+                    ? "bg-amber-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <ShoppingCart className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+                <span>Lista de Compras</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.INVENTORY)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.INVENTORY
+                    ? "bg-amber-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Package className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
+                <span>Estoque</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.KANBAN)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.KANBAN
+                    ? "bg-amber-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 shrink-0 text-purple-400" />
+                <span className="leading-tight text-left">Sonhos de Consumo</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Planejamento */}
+        <div className="space-y-1">
+          <button
+            onClick={() => toggleMenu("planejamento", View.PRODUCTIVITY)}
+            className={`flex w-full items-center justify-between px-3 py-2.5 rounded-xl transition-all text-xs font-bold ${
+              isProductivityActive
+                ? "bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
+                : "text-slate-400 hover:bg-slate-800/80 hover:text-white"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-1.5 rounded-lg ${isProductivityActive ? 'bg-emerald-600 text-white' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                <Target className="w-4 h-4" />
+              </div>
+              <span>Planejamento</span>
+            </div>
+            {(openMenus.planejamento ?? isProductivityActive) ? (
+              <ChevronDown className="w-4 h-4 text-slate-400" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-slate-400" />
+            )}
+          </button>
+
+          {(openMenus.planejamento ?? isProductivityActive) && (
+            <div className="pl-4 space-y-1 py-1 border-l-2 border-emerald-500/30 ml-4">
+              <button
+                onClick={() => handleNavClick(View.PRODUCTIVITY)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.PRODUCTIVITY
+                    ? "bg-emerald-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Target className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+                <span>Hábitos</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.NOTES)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.NOTES
+                    ? "bg-emerald-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <StickyNote className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                <span>NEXO Notes</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.WORK_GOALS)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.WORK_GOALS
+                    ? "bg-emerald-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <LineChart className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                <span>Metas de Trabalho</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.PASSWORDS)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.PASSWORDS
+                    ? "bg-emerald-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Key className="w-3.5 h-3.5 shrink-0 text-sky-400" />
+                <span>Cofre de Senhas</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Saúde */}
+        <div className="space-y-1">
+          <button
+            onClick={() => toggleMenu("saude", View.TREINO)}
+            className={`flex w-full items-center justify-between px-3 py-2.5 rounded-xl transition-all text-xs font-bold ${
+              isSaudeActive
+                ? "bg-rose-600/20 text-rose-300 border border-rose-500/40 shadow-sm"
+                : "text-slate-400 hover:bg-slate-800/80 hover:text-white"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-1.5 rounded-lg ${isSaudeActive ? 'bg-rose-600 text-white' : 'bg-rose-500/10 text-rose-400'}`}>
+                <Activity className="w-4 h-4" />
+              </div>
+              <span>Saúde</span>
+            </div>
+            {(openMenus.saude ?? isSaudeActive) ? (
+              <ChevronDown className="w-4 h-4 text-slate-400" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-slate-400" />
+            )}
+          </button>
+
+          {(openMenus.saude ?? isSaudeActive) && (
+            <div className="pl-4 space-y-1 py-1 border-l-2 border-rose-500/30 ml-4">
+              <button
+                onClick={() => handleNavClick(View.TREINO)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.TREINO
+                    ? "bg-rose-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Activity className="w-3.5 h-3.5 shrink-0 text-orange-400" />
+                <span>Treinos & Saúde</span>
+              </button>
+            </div>
+          )}
+        </div>
         
         {/* Focus Mode */}
         <div className="mt-6 pt-4 border-t border-slate-800">

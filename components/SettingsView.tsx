@@ -44,8 +44,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [newProdName, setNewProdName] = useState('');
   const [newProdCategory, setNewProdCategory] = useState<ShoppingCategory>('Hortifruti');
   const [newProdDefaultUnit, setNewProdDefaultUnit] = useState('un');
+  const [newProdBrand, setNewProdBrand] = useState('');
   const [newProdDefaultPrice, setNewProdDefaultPrice] = useState('');
+  const [newProdIsBlacklisted, setNewProdIsBlacklisted] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Edit Registered Product State
+  const [editingProduct, setEditingProduct] = useState<RegisteredProduct | null>(null);
+  const [editProdName, setEditProdName] = useState('');
+  const [editProdCategory, setEditProdCategory] = useState<ShoppingCategory>('Hortifruti');
+  const [editProdDefaultUnit, setEditProdDefaultUnit] = useState('un');
+  const [editProdBrand, setEditProdBrand] = useState('');
+  const [editProdDefaultPrice, setEditProdDefaultPrice] = useState('');
+  const [editProdIsBlacklisted, setEditProdIsBlacklisted] = useState(false);
   
   // CSV Import State
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -85,11 +96,48 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           name: newProdName.trim(),
           category: newProdCategory,
           unit: newProdDefaultUnit,
+          brand: newProdBrand.trim() || undefined,
           defaultPrice: defaultPrice,
+          isBlacklisted: newProdIsBlacklisted,
       });
 
       setNewProdName('');
+      setNewProdBrand('');
       setNewProdDefaultPrice('');
+      setNewProdIsBlacklisted(false);
+  };
+
+  const handleStartEditProduct = (prod: RegisteredProduct) => {
+      setEditingProduct(prod);
+      setEditProdName(prod.name);
+      setEditProdCategory(prod.category || 'Hortifruti');
+      setEditProdDefaultUnit(prod.unit || 'un');
+      setEditProdBrand(prod.brand || '');
+      setEditProdDefaultPrice(
+          prod.defaultPrice !== undefined && prod.defaultPrice > 0
+              ? prod.defaultPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+              : ''
+      );
+      setEditProdIsBlacklisted(!!prod.isBlacklisted);
+  };
+
+  const handleSaveEditProduct = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!editingProduct || !editProdName.trim()) return;
+
+      const numericValue = editProdDefaultPrice.replace(/\D/g, '');
+      const defaultPrice = numericValue ? parseFloat(numericValue) / 100 : undefined;
+
+      actions.updateRegisteredProduct(editingProduct.id, {
+          name: editProdName.trim(),
+          category: editProdCategory,
+          unit: editProdDefaultUnit,
+          brand: editProdBrand.trim() || undefined,
+          defaultPrice: defaultPrice,
+          isBlacklisted: editProdIsBlacklisted,
+      });
+
+      setEditingProduct(null);
   };
 
   const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -503,12 +551,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                   <option value="kg">KG</option>
                                   <option value="g">g</option>
                                   <option value="L">L</option>
-                                  <option value="ml">ml</option>
                                   <option value="cx">CX</option>
                                   <option value="pct">PCT</option>
                                   <option value="pc">PÇ</option>
                                   <option value="bdj">BDJ</option>
                               </select>
+                          </div>
+                          <div className="md:col-span-2">
+                              <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Marca (Opcional)</label>
+                              <input 
+                                  type="text" 
+                                  placeholder="Ex: Tio João, Nestlé..." 
+                                  value={newProdBrand}
+                                  onChange={(e) => setNewProdBrand(e.target.value)}
+                                  className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                              />
                           </div>
                           <div className="md:col-span-2">
                               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Preço Ref. Padrão (Opcional)</label>
@@ -523,7 +580,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                   />
                               </div>
                           </div>
-                          <div className="md:col-span-2 flex justify-end">
+                          <div className="md:col-span-4 flex items-center gap-2">
+                              <input 
+                                  type="checkbox"
+                                  id="isBlacklistedProd"
+                                  checked={newProdIsBlacklisted}
+                                  onChange={(e) => setNewProdIsBlacklisted(e.target.checked)}
+                                  className="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                              />
+                              <label htmlFor="isBlacklistedProd" className="text-xs font-bold text-rose-700 dark:text-rose-400 cursor-pointer">
+                                  🔴 Marcar na Lista Negra (Consumo prejudicial ou restrito)
+                              </label>
+                          </div>
+                          <div className="md:col-span-4 flex justify-end">
                               <button 
                                   type="submit"
                                   className="w-full md:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold flex items-center justify-center gap-2 shadow-sm transition-colors"
@@ -565,14 +634,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                   .map(p => (
                                       <div key={p.id} className="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-100 dark:border-slate-700/70 hover:border-indigo-300 dark:hover:border-indigo-500/50 transition-colors">
                                           <div>
-                                              <p className="font-bold text-slate-800 dark:text-white text-sm">{p.name}</p>
-                                              <div className="flex items-center gap-2 mt-1">
+                                              <p className="font-bold text-slate-800 dark:text-white text-sm flex items-center gap-2">
+                                                  {p.name}
+                                                  {p.isBlacklisted && (
+                                                      <span className="px-1.5 py-0.5 bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-400 text-[10px] font-bold rounded">
+                                                          🔴 Lista Negra
+                                                      </span>
+                                                  )}
+                                              </p>
+                                              <div className="flex flex-wrap items-center gap-2 mt-1">
                                                   <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded text-[10px] font-bold">
                                                       {p.category}
                                                   </span>
                                                   <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">
                                                       unidade: {p.unit}
                                                   </span>
+                                                  {p.brand && (
+                                                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                                          Marca: {p.brand}
+                                                      </span>
+                                                  )}
                                                   {p.defaultPrice !== undefined && p.defaultPrice > 0 && (
                                                       <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">
                                                           R$ {p.defaultPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -580,17 +661,155 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                                   )}
                                               </div>
                                           </div>
-                                          <button 
-                                              onClick={() => { if(confirm(`Excluir produto "${p.name}" do catálogo?`)) actions.deleteRegisteredProduct(p.id); }}
-                                              className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
-                                          >
-                                              <Trash2 className="w-4 h-4" />
-                                          </button>
+                                          <div className="flex items-center gap-1">
+                                              <button 
+                                                  onClick={() => handleStartEditProduct(p)}
+                                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-lg transition-colors"
+                                                  title="Editar produto"
+                                              >
+                                                  <Edit2 className="w-4 h-4" />
+                                              </button>
+                                              <button 
+                                                  onClick={() => { if(confirm(`Excluir produto "${p.name}" do catálogo?`)) actions.deleteRegisteredProduct(p.id); }}
+                                                  className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
+                                                  title="Excluir produto"
+                                              >
+                                                  <Trash2 className="w-4 h-4" />
+                                              </button>
+                                          </div>
                                       </div>
                                   ))
                               }
                           </div>
                       )}
+                  </div>
+              </div>
+          )}
+
+          {/* EDIT PRODUCT MODAL */}
+          {editingProduct && (
+              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl animate-scale-in border border-slate-200 dark:border-slate-700">
+                      <div className="flex justify-between items-center mb-4">
+                          <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                              <Edit2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                              Editar Produto do Catálogo
+                          </h3>
+                          <button 
+                              onClick={() => setEditingProduct(null)}
+                              className="p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+                          >
+                              <X className="w-5 h-5" />
+                          </button>
+                      </div>
+
+                      <form onSubmit={handleSaveEditProduct} className="space-y-4">
+                          <div>
+                              <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Nome do Produto</label>
+                              <input 
+                                  type="text" 
+                                  value={editProdName}
+                                  onChange={(e) => setEditProdName(e.target.value)}
+                                  className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium"
+                                  required
+                              />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Categoria</label>
+                                  <select 
+                                      value={editProdCategory}
+                                      onChange={(e) => setEditProdCategory(e.target.value as ShoppingCategory)}
+                                      className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none font-medium text-sm"
+                                  >
+                                      <option value="Hortifruti">Hortifruti</option>
+                                      <option value="Carnes">Carnes</option>
+                                      <option value="Laticínios">Laticínios</option>
+                                      <option value="Mercearia">Mercearia</option>
+                                      <option value="Padaria">Padaria</option>
+                                      <option value="Bebidas">Bebidas</option>
+                                      <option value="Limpeza">Limpeza</option>
+                                      <option value="Higiene">Higiene</option>
+                                      <option value="Outros">Outros</option>
+                                  </select>
+                              </div>
+
+                              <div>
+                                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Unidade Padrão</label>
+                                  <select 
+                                      value={editProdDefaultUnit}
+                                      onChange={(e) => setEditProdDefaultUnit(e.target.value)}
+                                      className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none font-medium text-sm"
+                                  >
+                                      <option value="un">UN</option>
+                                      <option value="kg">KG</option>
+                                      <option value="g">g</option>
+                                      <option value="L">L</option>
+                                      <option value="cx">CX</option>
+                                      <option value="pct">PCT</option>
+                                      <option value="pc">PÇ</option>
+                                      <option value="bdj">BDJ</option>
+                                  </select>
+                              </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Marca (Opcional)</label>
+                                  <input 
+                                      type="text" 
+                                      placeholder="Ex: Tio João, Nestlé..."
+                                      value={editProdBrand}
+                                      onChange={(e) => setEditProdBrand(e.target.value)}
+                                      className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none text-sm"
+                                  />
+                              </div>
+
+                              <div>
+                                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Preço Ref. Padrão (R$)</label>
+                                  <div className="relative">
+                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">R$</span>
+                                      <input 
+                                          type="text" 
+                                          placeholder="0,00"
+                                          value={editProdDefaultPrice}
+                                          onChange={(e) => setEditProdDefaultPrice(formatCurrencyInput(e.target.value))}
+                                          className="w-full pl-8 pr-3 py-2.5 font-bold text-right rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                                      />
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-1">
+                              <input 
+                                  type="checkbox"
+                                  id="editIsBlacklistedProd"
+                                  checked={editProdIsBlacklisted}
+                                  onChange={(e) => setEditProdIsBlacklisted(e.target.checked)}
+                                  className="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                              />
+                              <label htmlFor="editIsBlacklistedProd" className="text-xs font-bold text-rose-700 dark:text-rose-400 cursor-pointer">
+                                  🔴 Marcar na Lista Negra (Consumo prejudicial ou restrito)
+                              </label>
+                          </div>
+
+                          <div className="flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-700">
+                              <button 
+                                  type="button"
+                                  onClick={() => setEditingProduct(null)}
+                                  className="flex-1 py-2.5 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors text-sm"
+                              >
+                                  Cancelar
+                              </button>
+                              <button 
+                                  type="submit"
+                                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md transition-colors text-sm"
+                              >
+                                  Salvar Alterações
+                              </button>
+                          </div>
+                      </form>
                   </div>
               </div>
           )}

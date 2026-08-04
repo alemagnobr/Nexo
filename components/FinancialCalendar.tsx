@@ -214,7 +214,11 @@ export const FinancialCalendar: React.FC<FinancialCalendarProps> = ({
       : Array.from({ length: 24 }).map((_, i) => i);
   }, [collapseEarlyHours]);
   const [isAgendaModalOpen, setIsAgendaModalOpen] = useState(false);
-    const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [viewingTransactionsDay, setViewingTransactionsDay] = useState<{
+    date: Date;
+    transactions: Transaction[];
+  } | null>(null);
   const [isListManagerOpen, setIsListManagerOpen] = useState(false);
   const [isFabOpen, setIsFabOpen] = useState(false);
   const [newListName, setNewListName] = useState("");
@@ -1264,10 +1268,11 @@ export const FinancialCalendar: React.FC<FinancialCalendarProps> = ({
               ))}
             </div>
 
-            {/* All Day Section */}
-            <div className="grid grid-cols-8 border-b border-slate-200 dark:border-slate-600 max-h-32 overflow-y-auto">
-              <div className="py-2 text-center text-[10px] font-bold text-slate-500 dark:text-slate-400 border-r border-slate-200 dark:border-slate-600 flex items-center justify-center">
-                O Dia Todo
+            {/* Dedicated Transactions Section */}
+            <div className="grid grid-cols-8 border-b border-slate-200 dark:border-slate-600 bg-slate-50/70 dark:bg-slate-900/50">
+              <div className="py-2 px-1 text-center text-[10px] font-bold text-indigo-600 dark:text-indigo-400 border-r border-slate-200 dark:border-slate-600 flex flex-col items-center justify-center gap-0.5 select-none min-h-[42px]">
+                <Banknote className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Transações</span>
               </div>
               {weekDays.map((d, i) => {
                 const dayTrans = displayedTransactions.filter((t) => {
@@ -1278,6 +1283,45 @@ export const FinancialCalendar: React.FC<FinancialCalendarProps> = ({
                     tYear === d.getFullYear()
                   );
                 });
+
+                return (
+                  <div
+                    key={i}
+                    className="p-1 border-r border-slate-200 dark:border-slate-600 flex items-center justify-center min-h-[42px]"
+                  >
+                    {dayTrans.length > 0 ? (
+                      <button
+                        onClick={() =>
+                          setViewingTransactionsDay({
+                            date: d,
+                            transactions: dayTrans,
+                          })
+                        }
+                        className="w-full py-1 px-1 rounded-md bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-[9px] font-bold flex items-center justify-center gap-1 transition-all shadow-2xs group cursor-pointer"
+                        title={`Clique para ver ${dayTrans.length} transação(ões)`}
+                      >
+                        <span className="relative flex h-1.5 w-1.5 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                        </span>
+                        <span className="truncate group-hover:underline">
+                          Transações disponíveis ({dayTrans.length})
+                        </span>
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-slate-300 dark:text-slate-600 font-medium">-</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* All Day Section */}
+            <div className="grid grid-cols-8 border-b border-slate-200 dark:border-slate-600 max-h-32 overflow-y-auto">
+              <div className="py-2 px-1 text-center text-[10px] font-bold text-slate-500 dark:text-slate-400 border-r border-slate-200 dark:border-slate-600 flex items-center justify-center">
+                O Dia Todo
+              </div>
+              {weekDays.map((d, i) => {
                 const dayTasks =
                   tasks?.filter((t) => {
                     if (!t.dueDate) return false;
@@ -1306,17 +1350,8 @@ export const FinancialCalendar: React.FC<FinancialCalendarProps> = ({
                 return (
                   <div
                     key={i}
-                    className="p-1 border-r border-slate-200 dark:border-slate-600 min-h-[40px]"
+                    className="p-1 border-r border-slate-200 dark:border-slate-600 min-h-[36px]"
                   >
-                    {dayTrans.map((t) => (
-                      <div
-                        key={t.id}
-                        className={`text-[9px] font-bold px-1 py-0.5 rounded mb-0.5 truncate ${t.type === "income" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"}`}
-                      >
-                        {t.type === "income" ? "+" : "-"}
-                        {formatValue(t.amount)} {t.description}
-                      </div>
-                    ))}
                     {dayTasks.map((t) => (
                       <div
                         key={t.id}
@@ -1466,12 +1501,13 @@ export const FinancialCalendar: React.FC<FinancialCalendarProps> = ({
               </div>
             </div>
 
-            {/* All Day Section */}
-            <div className="grid grid-cols-[60px_1fr] border-b border-slate-200 dark:border-slate-600 max-h-32 overflow-y-auto">
-              <div className="py-2 text-center text-[10px] font-bold text-slate-500 dark:text-slate-400 border-r border-slate-200 dark:border-slate-600 flex items-center justify-center">
-                O Dia Todo
+            {/* Dedicated Transactions Section */}
+            <div className="grid grid-cols-[60px_1fr] border-b border-slate-200 dark:border-slate-600 bg-slate-50/70 dark:bg-slate-900/50">
+              <div className="py-2 px-1 text-center text-[10px] font-bold text-indigo-600 dark:text-indigo-400 border-r border-slate-200 dark:border-slate-600 flex flex-col items-center justify-center gap-0.5 select-none min-h-[42px]">
+                <Banknote className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Transações</span>
               </div>
-              <div className="p-1 min-h-[40px]">
+              <div className="p-1.5 min-h-[42px] flex items-center">
                 {(() => {
                   const d = new Date(year, month, selectedDay || 1);
                   const dayTrans = displayedTransactions.filter((t) => {
@@ -1482,6 +1518,46 @@ export const FinancialCalendar: React.FC<FinancialCalendarProps> = ({
                       tYear === d.getFullYear()
                     );
                   });
+
+                  if (dayTrans.length === 0) {
+                    return (
+                      <span className="text-[10px] text-slate-400 italic px-1">Nenhuma transação neste dia</span>
+                    );
+                  }
+
+                  return (
+                    <button
+                      onClick={() =>
+                        setViewingTransactionsDay({
+                          date: d,
+                          transactions: dayTrans,
+                        })
+                      }
+                      className="py-1 px-2.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-[11px] font-bold flex items-center gap-2 transition-all shadow-2xs group cursor-pointer"
+                    >
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                      <Banknote className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Transações disponíveis ({dayTrans.length})</span>
+                      <span className="text-[10px] font-medium opacity-80 bg-emerald-200/60 dark:bg-emerald-800/60 px-1.5 py-0.5 rounded text-emerald-900 dark:text-emerald-100 ml-1">
+                        Clique para ver detalhes
+                      </span>
+                    </button>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* All Day Section */}
+            <div className="grid grid-cols-[60px_1fr] border-b border-slate-200 dark:border-slate-600 max-h-32 overflow-y-auto">
+              <div className="py-2 text-center text-[10px] font-bold text-slate-500 dark:text-slate-400 border-r border-slate-200 dark:border-slate-600 flex items-center justify-center">
+                O Dia Todo
+              </div>
+              <div className="p-1 min-h-[40px]">
+                {(() => {
+                  const d = new Date(year, month, selectedDay || 1);
                   const dayTasks =
                     tasks?.filter((t) => {
                       if (!t.dueDate) return false;
@@ -1511,15 +1587,6 @@ export const FinancialCalendar: React.FC<FinancialCalendarProps> = ({
 
                   return (
                     <>
-                      {dayTrans.map((t) => (
-                        <div
-                          key={t.id}
-                          className={`text-[9px] font-bold px-1 py-0.5 rounded mb-0.5 truncate ${t.type === "income" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"}`}
-                        >
-                          {t.type === "income" ? "+" : "-"}
-                          {formatValue(t.amount)} {t.description}
-                        </div>
-                      ))}
                       {dayTasks.map((t) => (
                         <div
                           key={t.id}
@@ -1768,6 +1835,182 @@ export const FinancialCalendar: React.FC<FinancialCalendarProps> = ({
           <Plus className="w-7 h-7" />
         </button>
       </div>
+
+      {/* Modal de Transações do Dia */}
+      {viewingTransactionsDay && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in"
+          onClick={() => setViewingTransactionsDay(null)}
+        >
+          <div
+            className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl text-emerald-600 dark:text-emerald-400">
+                  <Banknote className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    <span>Transações da Agenda</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 font-semibold border border-emerald-200 dark:border-emerald-800">
+                      {viewingTransactionsDay.transactions.length}{" "}
+                      {viewingTransactionsDay.transactions.length === 1
+                        ? "registro"
+                        : "registros"}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">
+                    {viewingTransactionsDay.date.toLocaleDateString("pt-BR", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingTransactionsDay(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Financial Summary Cards */}
+            {(() => {
+              const totalIncome = viewingTransactionsDay.transactions
+                .filter((t) => t.type === "income")
+                .reduce((acc, t) => acc + t.amount, 0);
+              const totalExpense = viewingTransactionsDay.transactions
+                .filter((t) => t.type === "expense")
+                .reduce((acc, t) => acc + t.amount, 0);
+              const netTotal = totalIncome - totalExpense;
+
+              return (
+                <div className="grid grid-cols-3 gap-2 p-4 bg-slate-100/60 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 text-xs">
+                  <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 p-2.5 rounded-xl">
+                    <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 block">
+                      Entradas
+                    </span>
+                    <span className="text-sm sm:text-base font-extrabold text-emerald-700 dark:text-emerald-300">
+                      +{formatValue(totalIncome)}
+                    </span>
+                  </div>
+                  <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 p-2.5 rounded-xl">
+                    <span className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400 block">
+                      Saídas
+                    </span>
+                    <span className="text-sm sm:text-base font-extrabold text-rose-700 dark:text-rose-300">
+                      -{formatValue(totalExpense)}
+                    </span>
+                  </div>
+                  <div
+                    className={`p-2.5 rounded-xl border ${
+                      netTotal >= 0
+                        ? "bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-900/50 text-indigo-700 dark:text-indigo-300"
+                        : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/50 text-amber-700 dark:text-amber-300"
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase font-bold opacity-80 block">
+                      Saldo do Dia
+                    </span>
+                    <span className="text-sm sm:text-base font-extrabold">
+                      {netTotal >= 0 ? "+" : ""}
+                      {formatValue(netTotal)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Transactions Table */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 uppercase text-[10px] font-bold tracking-wider border-b border-slate-200 dark:border-slate-700">
+                    <tr>
+                      <th className="py-2.5 px-3">Tipo</th>
+                      <th className="py-2.5 px-3">Descrição</th>
+                      <th className="py-2.5 px-3">Categoria</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3 text-right">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-700/60 bg-white dark:bg-slate-800">
+                    {viewingTransactionsDay.transactions.map((t) => (
+                      <tr
+                        key={t.id}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors"
+                      >
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          {t.type === "income" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                              <ArrowUp className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                              Entrada
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                              <ArrowDown className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                              Saída
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-200">
+                          {t.description}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">
+                          {t.category || "Geral"}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              t.status === "paid" || !t.status
+                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                                : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+                            }`}
+                          >
+                            {t.status === "paid" || !t.status
+                              ? "Pago"
+                              : "Pendente"}
+                          </span>
+                        </td>
+                        <td
+                          className={`py-2.5 px-3 text-right font-black whitespace-nowrap text-xs ${
+                            t.type === "income"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-rose-600 dark:text-rose-400"
+                          }`}
+                        >
+                          {t.type === "income" ? "+" : "-"}
+                          {formatValue(t.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 flex items-center justify-between">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Total: {viewingTransactionsDay.transactions.length}{" "}
+                transação(ões) no dia
+              </span>
+              <button
+                onClick={() => setViewingTransactionsDay(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

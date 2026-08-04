@@ -7,11 +7,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, (process as any).cwd(), '');
 
   return {
-    base: process.env.NODE_ENV === 'production' ? '/Nexo/' : '/',
+    base: './',
     plugins: [react()],
     server: {
       port: 3000,
-      open: true
+      host: '0.0.0.0'
     },
     define: {
       // Expõe a API_KEY para o código como process.env.API_KEY

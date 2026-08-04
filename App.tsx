@@ -50,6 +50,7 @@ import { SettingsView } from "./components/SettingsView";
 // New Wrapper Views
 import { FinanceiroView } from "./components/FinanceiroView";
 import { PlanejamentoView } from "./components/PlanejamentoView";
+import { ComprasView } from "./components/ComprasView";
 import { SaudeView } from "./components/SaudeView";
 import { FinancialCalendar } from "./components/FinancialCalendar";
 
@@ -350,8 +351,23 @@ const App: React.FC = () => {
       );
     }
 
-    // 4. Group: Productivity (Kanban, Notes, Habits, Eisenhower, Utilities)
-    if ([View.PLANEJAMENTO_DASHBOARD, View.KANBAN, View.NOTES, View.PRODUCTIVITY, View.WORK_GOALS, View.SHOPPING_LIST, View.PASSWORDS, View.INVENTORY].includes(currentView)) {
+    // 3. Group: Compras (Shopping List, Inventory, Nexo Sonhos de Consumo)
+    if ([View.SHOPPING_LIST, View.INVENTORY, View.KANBAN].includes(currentView)) {
+      return (
+        <ComprasView
+          currentView={currentView}
+          onNavigate={setCurrentView}
+          data={data}
+          actions={actions}
+          privacyMode={privacyMode}
+          hasApiKey={hasKey}
+          quickActionSignal={quickActionSignal}
+        />
+      );
+    }
+
+    // 4. Group: Productivity (Notes, Habits, Work Goals, Passwords)
+    if ([View.PLANEJAMENTO_DASHBOARD, View.NOTES, View.PRODUCTIVITY, View.WORK_GOALS, View.PASSWORDS].includes(currentView)) {
       return (
         <PlanejamentoView
           currentView={currentView}
@@ -530,33 +546,56 @@ const App: React.FC = () => {
             View.PLANEJAMENTO_DASHBOARD, View.KANBAN, View.NOTES, View.PRODUCTIVITY, View.WORK_GOALS, View.SHOPPING_LIST, View.PASSWORDS, View.INVENTORY,
             View.SAUDE_DASHBOARD, View.TREINO
           ].includes(currentView) && (
-            <div className="w-full overflow-x-auto scrollbar-hide pb-2 mb-6 px-1">
-              <div className="flex items-stretch justify-center w-max min-w-full p-1.5 bg-slate-900/95 dark:bg-slate-950 backdrop-blur-md rounded-2xl mx-auto border border-slate-800 dark:border-slate-800/80 shadow-md">
+            <div className="w-full overflow-x-auto scrollbar-hide pb-1 mb-5 px-1">
+              <div className="flex items-center justify-between gap-1 max-w-4xl p-1 bg-slate-900/90 dark:bg-slate-950/90 backdrop-blur-xl rounded-full mx-auto border border-slate-800/80 shadow-xl shadow-slate-950/30">
                 {[
-                  { id: View.DASHBOARD, label: 'Visão Geral', icon: LayoutDashboard, color: 'text-indigo-400', activeBg: 'bg-indigo-650 text-white ring-1 ring-indigo-500/30', 
+                  { id: View.DASHBOARD, label: 'Visão Geral', icon: LayoutDashboard, 
+                    activeBg: 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/30',
+                    activeIcon: 'text-white',
+                    inactiveIcon: 'text-indigo-400',
                     isActive: currentView === View.DASHBOARD },
-                  { id: View.CALENDAR, label: 'Agenda', icon: Calendar, color: 'text-purple-400', activeBg: 'bg-purple-650 text-white ring-1 ring-purple-500/30',
+                  { id: View.CALENDAR, label: 'Agenda', icon: Calendar, 
+                    activeBg: 'bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-1 ring-purple-400/30',
+                    activeIcon: 'text-white',
+                    inactiveIcon: 'text-purple-400',
                     isActive: currentView === View.CALENDAR },
-                  { id: View.TRANSACTIONS, label: 'Financeiro', icon: Landmark, color: 'text-blue-400', activeBg: 'bg-blue-650 text-white ring-1 ring-blue-500/30',
+                  { id: View.TRANSACTIONS, label: 'Financeiro', icon: Landmark, 
+                    activeBg: 'bg-blue-600 text-white shadow-md shadow-blue-600/30 ring-1 ring-blue-400/30',
+                    activeIcon: 'text-white',
+                    inactiveIcon: 'text-blue-400',
                     isActive: [View.FINANCEIRO_DASHBOARD, View.TRANSACTIONS, View.SUBSCRIPTIONS, View.DEBTS, View.INVESTMENTS, View.BUDGETS, View.WEALTH_PLANNER, View.PIX_KEYS].includes(currentView) },
-                  { id: View.PRODUCTIVITY, label: 'Planejamento', icon: Target, color: 'text-emerald-400', activeBg: 'bg-emerald-650 text-white ring-1 ring-emerald-500/30',
-                    isActive: [View.PLANEJAMENTO_DASHBOARD, View.KANBAN, View.NOTES, View.PRODUCTIVITY, View.WORK_GOALS, View.SHOPPING_LIST, View.PASSWORDS, View.INVENTORY].includes(currentView) },
-                  { id: View.TREINO, label: 'Saúde', icon: Activity, color: 'text-rose-400', activeBg: 'bg-rose-650 text-white ring-1 ring-rose-500/30',
+                  { id: View.SHOPPING_LIST, label: 'Compras', icon: ShoppingCart, 
+                    activeBg: 'bg-amber-600 text-white shadow-md shadow-amber-600/30 ring-1 ring-amber-400/30',
+                    activeIcon: 'text-white',
+                    inactiveIcon: 'text-amber-400',
+                    isActive: [View.SHOPPING_LIST, View.INVENTORY, View.KANBAN].includes(currentView) },
+                  { id: View.PRODUCTIVITY, label: 'Planejamento', icon: Target, 
+                    activeBg: 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400/30',
+                    activeIcon: 'text-white',
+                    inactiveIcon: 'text-emerald-400',
+                    isActive: [View.PLANEJAMENTO_DASHBOARD, View.NOTES, View.PRODUCTIVITY, View.WORK_GOALS, View.PASSWORDS].includes(currentView) },
+                  { id: View.TREINO, label: 'Saúde', icon: Activity, 
+                    activeBg: 'bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-1 ring-rose-400/30',
+                    activeIcon: 'text-white',
+                    inactiveIcon: 'text-rose-400',
                     isActive: [View.SAUDE_DASHBOARD, View.TREINO].includes(currentView) }
                 ].map(tab => {
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => triggerQuickAction(tab.id)}
+                      onClick={() => {
+                        setCurrentView(tab.id);
+                        setMobileMenuOpen(false);
+                      }}
                       className={`
-                        flex-1 shrink-0 relative flex flex-row items-center justify-center gap-1.5 md:gap-2 py-2 md:py-2.5 px-4 md:px-6 rounded-xl font-bold transition-all duration-300
+                        group flex-1 shrink-0 relative flex flex-row items-center justify-center gap-1.5 md:gap-2 py-1.5 md:py-2 px-3 md:px-4 rounded-full font-semibold transition-all duration-200 cursor-pointer text-xs md:text-xs
                         ${tab.isActive 
-                          ? `${tab.activeBg} shadow-sm` 
-                          : `text-slate-400 hover:text-white hover:bg-slate-800/50`}
+                          ? `${tab.activeBg}` 
+                          : `text-slate-400 hover:text-slate-100 hover:bg-slate-800/60`}
                       `}
                     >
-                      <tab.icon className={`w-4 h-4 md:w-4 md:h-4 ${tab.isActive ? 'scale-110' : ''} transition-transform`} />
-                      <span className="text-[10px] md:text-xs whitespace-nowrap">{tab.label}</span>
+                      <tab.icon className={`w-3.5 h-3.5 md:w-4 md:h-4 shrink-0 transition-transform group-hover:scale-105 ${tab.isActive ? tab.activeIcon : tab.inactiveIcon}`} />
+                      <span className="whitespace-nowrap tracking-tight">{tab.label}</span>
                     </button>
                   );
                 })}

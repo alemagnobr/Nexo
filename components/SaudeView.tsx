@@ -16,7 +16,9 @@ export const SaudeView: React.FC<SaudeViewProps> = ({ currentView, onNavigate, d
       id: View.TREINO, 
       label: 'Gestão de Treinos', 
       icon: Dumbbell,
-      activeColor: 'text-orange-600 dark:text-orange-400'
+      iconColor: 'text-orange-600 dark:text-orange-400',
+      iconBg: 'bg-orange-100/90 dark:bg-orange-950/80',
+      activeBorder: 'border-orange-500/30 text-orange-700 dark:text-orange-300'
     }
   ];
 
@@ -26,18 +28,18 @@ export const SaudeView: React.FC<SaudeViewProps> = ({ currentView, onNavigate, d
       <div className="mb-6">
         <div className="pb-2">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2.5 bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-xl">
+            <div className="p-2.5 bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-xl shadow-sm">
               <Activity className="w-6 h-6" />
             </div>
             <div>
               <h2 className="text-2xl font-black text-slate-800 dark:text-white leading-tight">Saúde e Bem-estar</h2>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Acompanhe seu corpo, treinos e alimentação.</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Acompanhe seu corpo, treinos e rotina física.</p>
             </div>
           </div>
           
-          {/* Internal Tabs Navigation - Integrated Segmented Control */}
-          <div className="w-full overflow-x-auto scrollbar-hide pb-2 md:pb-0">
-            <div className="flex items-stretch justify-center w-max min-w-full p-1.5 bg-slate-100/80 dark:bg-slate-800/80 backdrop-blur-md rounded-2xl mx-auto border border-slate-200/50 dark:border-slate-700/50">
+          {/* Internal Tabs Navigation - Sleek Compact Pill Control */}
+          <div className="w-full overflow-x-auto scrollbar-hide pb-1">
+            <div className="flex items-center gap-1 w-max min-w-full md:w-auto p-1 bg-slate-200/60 dark:bg-slate-800/50 backdrop-blur-md rounded-full mx-auto border border-slate-300/60 dark:border-slate-700/60 shadow-sm">
               {tabs.map(tab => {
                 const Icon = tab.icon;
                 const isActive = currentView === tab.id;
@@ -47,14 +49,14 @@ export const SaudeView: React.FC<SaudeViewProps> = ({ currentView, onNavigate, d
                     key={tab.id}
                     onClick={() => onNavigate(tab.id as View)}
                     className={`
-                      flex-1 shrink-0 relative flex flex-row items-center justify-center gap-1.5 md:gap-2 py-2 md:py-2.5 px-3 md:px-2 rounded-xl font-bold transition-all duration-300
+                      flex-1 shrink-0 relative flex flex-row items-center justify-center gap-1.5 py-1.5 px-3 md:px-5 rounded-full font-medium transition-all duration-200 cursor-pointer text-xs
                       ${isActive 
-                        ? `bg-white dark:bg-slate-700 shadow-sm ring-1 ring-slate-200 dark:ring-slate-600 ${tab.activeColor}` 
-                        : `text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50`}
+                        ? `bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-300/60 dark:ring-slate-600 font-semibold` 
+                        : `text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300/40 dark:hover:bg-slate-700/40`}
                     `}
                   >
-                    <Icon className={`w-4 h-4 md:w-4 md:h-4 ${isActive ? 'scale-110' : ''} transition-transform`} />
-                    <span className="text-xs md:text-sm whitespace-nowrap truncate">{tab.label}</span>
+                    <Icon className={`w-3.5 h-3.5 shrink-0 ${tab.iconColor}`} />
+                    <span className="whitespace-nowrap truncate">{tab.label}</span>
                   </button>
                 );
               })}

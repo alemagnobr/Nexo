@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { ShoppingItem, ShoppingCategory, RegisteredProduct, InventoryItem } from "../types";
+import { ShoppingItem, ShoppingCategory, RegisteredProduct, InventoryItem, ReplenishmentLog } from "../types";
 import {
   Plus,
   Trash2,
@@ -24,6 +24,8 @@ import {
   Search,
   TrendingUp,
   TrendingDown,
+  Package,
+  CheckCircle2,
 } from "lucide-react";
 import { generateShoppingListFromRecipe } from "../services/geminiService";
 import { CurrencyInput } from "./CurrencyInput";
@@ -50,6 +52,9 @@ interface ShoppingListProps {
   privacyMode: boolean;
   quickActionSignal?: number;
   onAddRegisteredProduct?: (product: Omit<RegisteredProduct, "id">) => Promise<any>;
+  onAddInventoryItem?: (item: Omit<InventoryItem, "id">) => Promise<any> | void;
+  onUpdateInventoryItem?: (id: string, updates: Partial<InventoryItem>) => Promise<any> | void;
+  onAddReplenishmentLog?: (log: Omit<ReplenishmentLog, "id">) => Promise<any> | void;
 }
 
 const SHOPPING_CATEGORIES: ShoppingCategory[] = [
@@ -79,6 +84,9 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
   privacyMode,
   quickActionSignal,
   onAddRegisteredProduct,
+  onAddInventoryItem,
+  onUpdateInventoryItem,
+  onAddReplenishmentLog,
 }) => {
   const [newItemName, setNewItemName] = useState("");
   const [newItemCategory, setNewItemCategory] =
@@ -92,6 +100,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
   );
   const [repeatDates, setRepeatDates] = useState<string[]>([]);
   const [newItemObservation, setNewItemObservation] = useState("");
+  const [newItemBrand, setNewItemBrand] = useState("");
 
   const [activeTab, setActiveTab] = useState<"list" | "timeline">("list");
 
@@ -104,6 +113,102 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
   // Product Search autocomplete states
   const [productSearch, setProductSearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Estoque automations when checking items
+  const [pendingStockItem, setPendingStockItem] = useState<ShoppingItem | null>(null);
+  const [isStockModalOpen, setIsStockModalOpen] = useState(false);
+  const [stockItemName, setStockItemName] = useState("");
+  const [stockItemQuantity, setStockItemQuantity] = useState<number>(1);
+  const [stockItemUnit, setStockItemUnit] = useState("un");
+  const [stockItemCategory, setStockItemCategory] = useState<ShoppingCategory>("Outros");
+  const [stockItemMinQuantity, setStockItemMinQuantity] = useState<number>(1);
+  const [stockItemPersistedMonths, setStockItemPersistedMonths] = useState<number>(0);
+  const [stockToastMessage, setStockToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (stockToastMessage) {
+      const timer = setTimeout(() => {
+        setStockToastMessage(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [stockToastMessage]);
+
+  const handleToggleCheck = (item: ShoppingItem) => {
+    const willBeChecked = !item.isChecked;
+    onUpdate(item.id, { isChecked: willBeChecked });
+    if (willBeChecked) {
+      setPendingStockItem(item);
+    }
+  };
+
+  const handleConfirmStockLaunch = async () => {
+    if (!pendingStockItem) return;
+    const existingInvItem = inventoryList.find(
+      (inv) => inv.name.trim().toLowerCase() === pendingStockItem.name.trim().toLowerCase()
+    );
+
+    if (existingInvItem) {
+      // "Se o produto já existe e tem em estoque ele soma a quantidade com o que tem."
+      const newQty = Number(existingInvItem.quantity || 0) + Number(pendingStockItem.quantity || 1);
+      if (onUpdateInventoryItem) {
+        await onUpdateInventoryItem(existingInvItem.id, { quantity: newQty });
+      }
+      if (onAddReplenishmentLog) {
+        await onAddReplenishmentLog({
+          itemName: existingInvItem.name,
+          quantityAdded: Number(pendingStockItem.quantity || 1),
+          unit: existingInvItem.unit || pendingStockItem.unit || "un",
+          category: existingInvItem.category || pendingStockItem.category || "Outros",
+          date: new Date().toISOString(),
+          type: "purchase",
+        });
+      }
+      setStockToastMessage(`Estoque de "${existingInvItem.name}" somado: agora há ${newQty} ${existingInvItem.unit || "un"}!`);
+      setPendingStockItem(null);
+    } else {
+      // "Se não tem produto cadastrado após o check ele abre a mesma caixa que ele abre quando vou cadastrar um estoque mas com as informações cadastradas e eu só complemento o q falta."
+      setStockItemName(pendingStockItem.name);
+      setStockItemQuantity(Number(pendingStockItem.quantity || 1));
+      setStockItemUnit(pendingStockItem.unit || "un");
+      setStockItemCategory((pendingStockItem.category as ShoppingCategory) || "Outros");
+      setStockItemMinQuantity(1);
+      setStockItemPersistedMonths(0);
+      setPendingStockItem(null);
+      setIsStockModalOpen(true);
+    }
+  };
+
+  const handleStockFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stockItemName.trim()) return;
+
+    const qty = Number(stockItemQuantity);
+    const minQty = Number(stockItemMinQuantity);
+
+    if (onAddInventoryItem) {
+      await onAddInventoryItem({
+        name: stockItemName.trim(),
+        quantity: qty,
+        unit: stockItemUnit,
+        category: stockItemCategory,
+        minQuantity: minQty,
+        persistedMonthsCount: Number(stockItemPersistedMonths),
+      });
+    }
+    if (onAddReplenishmentLog) {
+      await onAddReplenishmentLog({
+        itemName: stockItemName.trim(),
+        quantityAdded: qty,
+        unit: stockItemUnit,
+        category: stockItemCategory,
+        date: new Date().toISOString(),
+        type: "purchase",
+      });
+    }
+    setIsStockModalOpen(false);
+    setStockToastMessage(`"${stockItemName.trim()}" cadastrado no estoque (${qty} ${stockItemUnit})!`);
+  };
 
   const getStockStatusForProduct = (productName: string) => {
     if (!productName || !inventoryList || inventoryList.length === 0) {
@@ -129,7 +234,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
         currentQty,
         persistedMonths
       };
-    } else if (currentQty <= minQty) {
+    } else if (currentQty < minQty) {
       return {
         label: "Aumentar estoque",
         classes: "text-rose-700 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/30",
@@ -146,6 +251,15 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
         currentQty
       };
     }
+  };
+
+  const isProductBlacklisted = (productName: string) => {
+    if (!productName || !registeredProducts) return false;
+    const nameLower = productName.trim().toLowerCase();
+    const found = registeredProducts.find(
+      (p) => p.name.trim().toLowerCase() === nameLower
+    );
+    return !!found?.isBlacklisted;
   };
 
   const handleQuickRegister = async () => {
@@ -233,6 +347,14 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
   const spentTotal = useMemo(() => {
     return filteredItems.reduce((acc, item) => {
       return acc + (item.isChecked ? item.actualPrice * item.quantity : 0);
+    }, 0);
+  }, [filteredItems]);
+
+  const remainingForecast = useMemo(() => {
+    return filteredItems.reduce((acc, item) => {
+      if (item.isChecked) return acc;
+      const itemPrice = item.referencePrice || item.actualPrice || 0;
+      return acc + itemPrice * item.quantity;
     }, 0);
   }, [filteredItems]);
 
@@ -381,6 +503,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
         name: nameToUse,
         quantity: newItemQuantity,
         unit: newItemUnit,
+        brand: newItemBrand.trim() || undefined,
         actualPrice: parseCurrencyInput(newItemPrice),
         referencePrice: parseCurrencyInput(newItemRefPrice),
         isChecked: false,
@@ -400,6 +523,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
     setNewItemUnit("un");
     setRepeatDates([]);
     setNewItemObservation("");
+    setNewItemBrand("");
   };
 
   const handleSaveEdit = (e: React.FormEvent) => {
@@ -409,6 +533,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
       name: editingItem.name.trim(),
       category: editingItem.category,
       unit: editingItem.unit || "un",
+      brand: editingItem.brand?.trim() || undefined,
       actualPrice: editingItem.actualPrice,
       referencePrice: editingItem.referencePrice,
       observation: editingItem.observation,
@@ -559,7 +684,6 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                     <option value="kg">KG</option>
                     <option value="g">g</option>
                     <option value="L">L</option>
-                    <option value="ml">ml</option>
                     <option value="cx">CX</option>
                     <option value="pct">PCT</option>
                     <option value="pc">PÇ</option>
@@ -661,22 +785,41 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
-                  Observação
-                </label>
-                <input
-                  type="text"
-                  value={editingItem.observation || ""}
-                  onChange={(e) =>
-                    setEditingItem({
-                      ...editingItem,
-                      observation: e.target.value,
-                    })
-                  }
-                  placeholder="Ex: Marca específica, quantidade em gramas..."
-                  className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                    Marca (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={editingItem.brand || ""}
+                    onChange={(e) =>
+                      setEditingItem({
+                        ...editingItem,
+                        brand: e.target.value,
+                      })
+                    }
+                    placeholder="Ex: Nestlé, Heinz..."
+                    className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                    Observação
+                  </label>
+                  <input
+                    type="text"
+                    value={editingItem.observation || ""}
+                    onChange={(e) =>
+                      setEditingItem({
+                        ...editingItem,
+                        observation: e.target.value,
+                      })
+                    }
+                    placeholder="Ex: Quantidade em gramas..."
+                    className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
               </div>
 
               <button
@@ -789,18 +932,35 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
 
         {/* Budget Control Bar */}
         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-          <div className="flex justify-between items-end mb-2">
-            <div className="flex gap-4 sm:gap-6">
+          <div className="flex justify-between items-end mb-2 flex-wrap gap-2">
+            <div className="flex gap-4 sm:gap-6 flex-wrap items-end">
               <div>
-                <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">
-                  Previsão
+                <p
+                  className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1"
+                  title="Soma total prevista da lista"
+                >
+                  Previsão (Total)
                 </p>
                 <p className="text-xl font-bold text-slate-800 dark:text-white">
                   {formatValue(forecastTotal)}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase text-emerald-500 tracking-wider mb-1 flex items-center gap-1">
+                <p
+                  className="text-[10px] font-bold uppercase text-amber-500 tracking-wider mb-1 flex items-center gap-1"
+                  title="Soma prevista dos itens que ainda não foram checados"
+                >
+                  Falta (Previsão)
+                </p>
+                <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
+                  {formatValue(remainingForecast)}
+                </p>
+              </div>
+              <div>
+                <p
+                  className="text-[10px] font-bold uppercase text-emerald-500 tracking-wider mb-1 flex items-center gap-1"
+                  title="Valor real já gasto com os itens checados"
+                >
                   <Check className="w-3 h-3" /> Real
                 </p>
                 <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
@@ -919,6 +1079,13 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                     />
                     <Search className="w-5 h-5 text-slate-400 absolute right-3 top-3.5 pointer-events-none" />
                   </div>
+
+                  {isProductBlacklisted(newItemName || productSearch) && (
+                    <div className="mt-2 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold flex items-center gap-2 animate-pulse">
+                      <AlertTriangle className="w-5 h-5 flex-shrink-0 text-rose-600" />
+                      <span>Atenção: Este alimento está na LISTA NEGRA (consumo prejudicial à saúde)!</span>
+                    </div>
+                  )}
 
                   {showSuggestions && (
                     <>
@@ -1071,7 +1238,6 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                       <option value="kg">KG</option>
                       <option value="g">g</option>
                       <option value="L">L</option>
-                      <option value="ml">ml</option>
                       <option value="cx">CX</option>
                       <option value="pct">PCT</option>
                       <option value="pc">PÇ</option>
@@ -1192,18 +1358,33 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
-                  Observação
-                </label>
-                <input
-                  type="text"
-                  value={newItemObservation}
-                  onChange={(e) => setNewItemObservation(e.target.value)}
-                  placeholder="Observação (opcional)"
-                  className="w-full p-3 text-sm rounded-xl border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
-                  autoComplete="off"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                    Marca (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={newItemBrand}
+                    onChange={(e) => setNewItemBrand(e.target.value)}
+                    placeholder="Ex: Nestlé, Heinz..."
+                    className="w-full p-3 text-sm rounded-xl border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                    autoComplete="off"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                    Observação
+                  </label>
+                  <input
+                    type="text"
+                    value={newItemObservation}
+                    onChange={(e) => setNewItemObservation(e.target.value)}
+                    placeholder="Observação (opcional)"
+                    className="w-full p-3 text-sm rounded-xl border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                    autoComplete="off"
+                  />
+                </div>
               </div>
 
               <button
@@ -1301,11 +1482,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                             {/* Check & Name */}
                             <div className="flex items-center gap-3 flex-1 min-w-0">
                               <button
-                                onClick={() =>
-                                  onUpdate(product.id, {
-                                    isChecked: !product.isChecked,
-                                  })
-                                }
+                                onClick={() => handleToggleCheck(product)}
                                 className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${
                                   product.isChecked
                                     ? "bg-emerald-500 border-emerald-500 text-white"
@@ -1315,11 +1492,18 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                                 <Check className="w-4 h-4" />
                               </button>
                               <div className="flex flex-col min-w-0">
-                                <span
-                                  className={`font-medium text-lg truncate ${product.isChecked ? "text-slate-400 line-through" : "text-slate-700 dark:text-slate-200"}`}
-                                >
-                                  {product.name}
-                                </span>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span
+                                    className={`font-medium text-lg truncate ${product.isChecked ? "text-slate-400 line-through" : "text-slate-700 dark:text-slate-200"}`}
+                                  >
+                                    {product.name}
+                                  </span>
+                                  {product.brand && (
+                                    <span className="text-[11px] font-bold uppercase tracking-wide bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-200/60 dark:border-indigo-800/60">
+                                      {product.brand}
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="flex items-center gap-2 flex-wrap text-xs">
                                   {product.observation && (
                                     <span
@@ -1516,11 +1700,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                             {/* Check & Name */}
                             <div className="flex items-center gap-3 flex-1 min-w-0">
                               <button
-                                onClick={() =>
-                                  onUpdate(item.id, {
-                                    isChecked: !item.isChecked,
-                                  })
-                                }
+                                onClick={() => handleToggleCheck(item)}
                                 className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${
                                   item.isChecked
                                     ? "bg-emerald-500 border-emerald-500 text-white"
@@ -1530,11 +1710,18 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                                 <Check className="w-4 h-4" />
                               </button>
                               <div className="flex flex-col min-w-0">
-                                <span
-                                  className={`font-medium text-lg truncate ${item.isChecked ? "text-slate-400 line-through" : "text-slate-700 dark:text-slate-200"}`}
-                                >
-                                  {item.name}
-                                </span>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span
+                                    className={`font-medium text-lg truncate ${item.isChecked ? "text-slate-400 line-through" : "text-slate-700 dark:text-slate-200"}`}
+                                  >
+                                    {item.name}
+                                  </span>
+                                  {item.brand && (
+                                    <span className="text-[11px] font-bold uppercase tracking-wide bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-200/60 dark:border-indigo-800/60">
+                                      {item.brand}
+                                    </span>
+                                  )}
+                                </div>
                                 {(() => {
                                   const stockStatus = getStockStatusForProduct(item.name);
                                   if (!stockStatus) return null;
@@ -1700,6 +1887,209 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
           })
         )}
       </div>
+
+      {/* Toast Notification para lançamento no estoque */}
+      {stockToastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-slide-up border border-slate-700 dark:border-slate-200">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 dark:text-emerald-600 shrink-0" />
+          <span className="text-xs font-semibold">{stockToastMessage}</span>
+          <button
+            onClick={() => setStockToastMessage(null)}
+            className="text-slate-400 hover:text-white dark:hover:text-slate-900 ml-2"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Pergunta automática após o check: Lançar em estoque? */}
+      {pendingStockItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-sm overflow-hidden border border-slate-200 dark:border-slate-700 shadow-2xl animate-scale-up p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                <Package className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-800 dark:text-white">
+                  Lançar em estoque?
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Integração automática com Estoque
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-slate-300 my-4">
+              Deseja lançar <strong className="text-slate-800 dark:text-white font-bold">"{pendingStockItem.name}"</strong> ({pendingStockItem.quantity} {pendingStockItem.unit || "un"}) na sua aba de Estoque?
+            </p>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setPendingStockItem(null)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Não, apenas marcar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmStockLaunch}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors shadow-lg shadow-indigo-600/20 cursor-pointer"
+              >
+                Sim, lançar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal - Novo Item no Estoque (quando o produto não existe lá) */}
+      {isStockModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700 shadow-2xl animate-scale-up">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-900/30">
+              <h3 className="text-base font-black text-slate-800 dark:text-white flex items-center gap-2">
+                <Package className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                Novo Item no Estoque
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsStockModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleStockFormSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 ml-1">
+                  Nome do Item *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Arroz, Leite, Papel Higiênico..."
+                  value={stockItemName}
+                  onChange={(e) => setStockItemName(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 ml-1">
+                    Qtd Atual
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={stockItemQuantity}
+                    onChange={(e) => setStockItemQuantity(Number(e.target.value))}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 ml-1">
+                    Unidade
+                  </label>
+                  <select
+                    value={stockItemUnit}
+                    onChange={(e) => setStockItemUnit(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="un">UN</option>
+                    <option value="kg">KG</option>
+                    <option value="g">G</option>
+                    <option value="cx">CX</option>
+                    <option value="pct">PCT</option>
+                    <option value="L">L</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 ml-1">
+                    Categoria
+                  </label>
+                  <select
+                    value={stockItemCategory}
+                    onChange={(e) =>
+                      setStockItemCategory(e.target.value as ShoppingCategory)
+                    }
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {SHOPPING_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 ml-1">
+                    Mínimo para Reposição
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={stockItemMinQuantity}
+                    onChange={(e) => setStockItemMinQuantity(Number(e.target.value))}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 ml-1">
+                  Persistência no Estoque
+                </label>
+                <select
+                  value={stockItemPersistedMonths}
+                  onChange={(e) =>
+                    setStockItemPersistedMonths(Number(e.target.value))
+                  }
+                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value={0}>Novo / Sem persistência (&lt; 1 mês)</option>
+                  <option value={1}>Persistiu por 1 mês no estoque</option>
+                  <option value={2}>
+                    Persistiu por 2 meses (Comprar menor %)
+                  </option>
+                  <option value={3}>
+                    Persistiu por 3 ou mais meses (Comprar menor %)
+                  </option>
+                </select>
+                <p className="text-[10px] text-indigo-500 dark:text-indigo-400 mt-1.5 ml-1 font-semibold">
+                  * Se persistir por pelo menos 2 meses, a lista de compras recomendará automaticamente comprar uma quantidade menor.
+                </p>
+              </div>
+
+              <div className="flex gap-2 pt-4 border-t border-slate-100 dark:border-slate-700/50 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsStockModalOpen(false)}
+                  className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-xs font-bold transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors shadow-lg shadow-indigo-600/20"
+                >
+                  Cadastrar no Estoque
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

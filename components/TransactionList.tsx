@@ -142,6 +142,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
     isRecurring: false,
     autoPay: false, // New
     installments: '',
+    installmentValueMode: 'total' as 'total' | 'installment',
     observation: ''
   });
 
@@ -442,7 +443,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
   };
 
   const resetForm = () => {
-    setNewTransaction({ description: '', amount: '', type: 'expense', category: 'Outros', date: new Date().toISOString().split('T')[0], time: '', status: 'pending', paymentMethod: 'credit_card', walletId: '', isRecurring: false, autoPay: false, installments: '', observation: '' });
+    setNewTransaction({ description: '', amount: '', type: 'expense', category: 'Outros', date: new Date().toISOString().split('T')[0], time: '', status: 'pending', paymentMethod: 'credit_card', walletId: '', isRecurring: false, autoPay: false, installments: '', installmentValueMode: 'total', observation: '' });
     setEditingId(null);
     setRecurrenceMode('monthly');
     setSelectedDays([]);
@@ -469,6 +470,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
         isRecurring: t.isRecurring || false, 
         autoPay: t.autoPay || false,
         installments: '',
+        installmentValueMode: 'total',
         observation: t.observation || ''
     });
     
@@ -678,6 +680,17 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
             else {
                 const numInstallments = parseInt(txData.installments);
                 if (!isNaN(numInstallments) && numInstallments > 1) {
+                    const isTotalMode = txData.installmentValueMode !== 'installment';
+                    const totalAmount = originalAmount;
+
+                    // Calculate base installment and cents remainder
+                    const baseInstallmentAmount = isTotalMode 
+                        ? Math.floor((totalAmount / numInstallments) * 100) / 100 
+                        : totalAmount;
+                    const centsRemainder = isTotalMode 
+                        ? Math.round((totalAmount - (baseInstallmentAmount * numInstallments)) * 100) / 100 
+                        : 0;
+
                     const [startYear, startMonth, startDay] = txData.date.split('-').map(Number);
                     const businessOrdinal = parseInt(businessDayOrdinal) || 5;
 
@@ -691,8 +704,12 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
                          }
 
                          const dyn = calculateDynamicDeductions(i);
+                         const installmentAmount = (i === 0) 
+                             ? (baseInstallmentAmount + centsRemainder) 
+                             : baseInstallmentAmount;
+
                          const desc = `${transactionData.description} (${i+1}/${numInstallments})`;
-                         onAdd({ ...transactionData, amount: dyn.amount, observation: dyn.observation, description: desc, date: isoDate, isRecurring: false, groupId });
+                         onAdd({ ...transactionData, amount: installmentAmount, observation: dyn.observation, description: desc, date: isoDate, isRecurring: false, groupId });
                     }
                 } else {
                     // Infinite Subscription
@@ -972,6 +989,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
           <WalletsView 
             wallets={wallets || []}
             transactions={transactions}
+            categories={categories}
             onAdd={onAddWallet}
             onUpdate={onUpdateWallet}
             onDelete={onDeleteWallet}
@@ -1481,6 +1499,56 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
                                         className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2 text-sm w-full outline-none focus:ring-2 focus:ring-indigo-500"
                                     />
                                 </div>
+
+                                {parseInt(newTransaction.installments) > 1 && (
+                                    <div className="space-y-2 mt-2 p-3 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl animate-fade-in">
+                                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase block">
+                                            O valor digitado no campo "Valor (R$)" representa:
+                                        </label>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                            <label className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-all ${newTransaction.installmentValueMode === 'total' ? 'bg-white dark:bg-slate-800 border-indigo-500 text-indigo-700 dark:text-indigo-300 font-bold shadow-sm' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <input
+                                                    type="radio"
+                                                    name="installmentValueMode"
+                                                    checked={newTransaction.installmentValueMode === 'total'}
+                                                    onChange={() => setNewTransaction({...newTransaction, installmentValueMode: 'total'})}
+                                                    className="mt-0.5 text-indigo-600"
+                                                />
+                                                <div>
+                                                    <div>Valor Total da Compra</div>
+                                                    <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400">Divide o valor total pelas {newTransaction.installments} parcelas</div>
+                                                </div>
+                                            </label>
+
+                                            <label className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-all ${newTransaction.installmentValueMode === 'installment' ? 'bg-white dark:bg-slate-800 border-indigo-500 text-indigo-700 dark:text-indigo-300 font-bold shadow-sm' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                <input
+                                                    type="radio"
+                                                    name="installmentValueMode"
+                                                    checked={newTransaction.installmentValueMode === 'installment'}
+                                                    onChange={() => setNewTransaction({...newTransaction, installmentValueMode: 'installment'})}
+                                                    className="mt-0.5 text-indigo-600"
+                                                />
+                                                <div>
+                                                    <div>Valor de Cada Parcela</div>
+                                                    <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400">Repete o valor em cada uma das {newTransaction.installments} parcelas</div>
+                                                </div>
+                                            </label>
+                                        </div>
+
+                                        {parseFloat(newTransaction.amount) > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-indigo-100 dark:border-indigo-900/40 text-xs text-indigo-900 dark:text-indigo-200 flex flex-col sm:flex-row items-start sm:items-center justify-between font-medium gap-1">
+                                                <span>Resumo do Parcelamento:</span>
+                                                <span className="font-extrabold text-indigo-600 dark:text-indigo-400">
+                                                    {newTransaction.installmentValueMode === 'total' ? (
+                                                        <>{newTransaction.installments}x de R$ {(parseFloat(newTransaction.amount) / parseInt(newTransaction.installments)).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (Total: R$ {parseFloat(newTransaction.amount).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})})</>
+                                                    ) : (
+                                                        <>{newTransaction.installments}x de R$ {parseFloat(newTransaction.amount).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (Total acumulado: R$ {(parseFloat(newTransaction.amount) * parseInt(newTransaction.installments)).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})})</>
+                                                    )}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ) : (

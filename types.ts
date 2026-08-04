@@ -107,6 +107,7 @@ export interface ShoppingItem {
   name: string;
   quantity: number;
   unit?: string; // e.g., 'un', 'kg', 'g', 'cx', 'pct', 'L'
+  brand?: string; // Marca opcional do produto
   actualPrice: number; // O valor que o usuário digita no mercado (calculadora)
   referencePrice?: number; // Previsão de custo
   isChecked: boolean; // Se já pegou o item
@@ -121,7 +122,9 @@ export interface RegisteredProduct {
   name: string;
   category: ShoppingCategory;
   unit: string;
+  brand?: string;
   defaultPrice?: number;
+  isBlacklisted?: boolean;
 }
 
 export interface InventoryItem {
@@ -490,11 +493,15 @@ export interface WorkoutRoutine {
   updatedAt: string;
 }
 
+export type WorkGoalUnit = 'hours' | 'minutes' | 'deliveries';
+
 export interface WorkGoal {
   id: string;
   title: string;
-  targetHours: number;
-  completedHours: number;
+  targetHours: number; // quantidade alvo (horas, minutos ou entregas)
+  completedHours: number; // quantidade realizada acumulada
+  unitType?: WorkGoalUnit; // 'hours' | 'minutes' | 'deliveries'
+  unitValue?: number; // valor monetário por hora, minuto ou entrega (R$)
   startDate?: string;
   deadline?: string;
   history?: { id: string; date: string; hours: number; notes?: string }[];

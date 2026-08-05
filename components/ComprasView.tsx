@@ -155,6 +155,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({
              items={data.inventoryList || []}
              replenishmentLogs={data.replenishmentHistory || []}
              shoppingList={data.shoppingList || []}
+             registeredProducts={data.registeredProducts || []}
              onAdd={actions.addInventoryItem}
              onUpdate={actions.updateInventoryItem}
              onDelete={actions.deleteInventoryItem}
@@ -172,6 +173,8 @@ export const ComprasView: React.FC<ComprasViewProps> = ({
                      month: item.month
                  });
              }}
+             onAddRegisteredProduct={actions.addRegisteredProduct}
+             onUpdateRegisteredProduct={actions.updateRegisteredProduct}
              privacyMode={privacyMode}
           />
         )}
@@ -186,6 +189,10 @@ export const ComprasView: React.FC<ComprasViewProps> = ({
                  onNavigate(View.TRANSACTIONS);
              }}
              privacyMode={privacyMode}
+             investments={data.investments || []}
+             onAddInvestment={actions.addInvestment}
+             onUpdateInvestment={actions.updateInvestment}
+             onNavigate={onNavigate}
           />
         )}
       </div>

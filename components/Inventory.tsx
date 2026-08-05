@@ -20,20 +20,24 @@ import {
   TrendingDown,
   Info,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Star
 } from 'lucide-react';
-import { InventoryItem, ShoppingCategory, ReplenishmentLog, ShoppingItem } from '../types';
+import { InventoryItem, ShoppingCategory, ReplenishmentLog, ShoppingItem, RegisteredProduct } from '../types';
 
 interface InventoryProps {
   items: InventoryItem[];
   replenishmentLogs?: ReplenishmentLog[];
   shoppingList?: ShoppingItem[];
+  registeredProducts?: RegisteredProduct[];
   onAdd: (item: Omit<InventoryItem, 'id'>) => void;
   onUpdate: (id: string, updates: Partial<InventoryItem>) => void;
   onDelete: (id: string) => void;
   onAddReplenishmentLog: (log: Omit<ReplenishmentLog, 'id'>) => void;
   onClearReplenishmentHistory: () => void;
   onAddToShoppingList: (item: { name: string; category: any; unit: string; quantity: number; month?: string }) => void;
+  onAddRegisteredProduct?: (product: Omit<RegisteredProduct, "id">) => Promise<any> | void;
+  onUpdateRegisteredProduct?: (id: string, updates: Partial<RegisteredProduct>) => Promise<any> | void;
   privacyMode: boolean;
 }
 
@@ -48,6 +52,12 @@ export const getStockStatusDetails = (item: InventoryItem) => {
       classes: "text-rose-700 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/30",
       description: "Nível abaixo do mínimo configurado."
     };
+  } else if (item.isMandatory) {
+    return {
+      label: "Obrigatório",
+      classes: "text-amber-700 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/30",
+      description: "Item de compra obrigatória (sempre repor pelo menos +1)."
+    };
   } else {
     return {
       label: "Estoque está bom",
@@ -61,12 +71,15 @@ export const Inventory: React.FC<InventoryProps> = ({
   items = [],
   replenishmentLogs = [],
   shoppingList = [],
+  registeredProducts = [],
   onAdd,
   onUpdate,
   onDelete,
   onAddReplenishmentLog,
   onClearReplenishmentHistory,
   onAddToShoppingList,
+  onAddRegisteredProduct,
+  onUpdateRegisteredProduct,
   privacyMode
 }) => {
   const [activeTab, setActiveTab] = useState<'stock' | 'history'>('stock');
@@ -113,18 +126,21 @@ export const Inventory: React.FC<InventoryProps> = ({
     const itemsNeedingReplenishment = items.filter(item => {
       const minQty = Number(item.minQuantity) || 0;
       const currentQty = Number(item.quantity) || 0;
-      return minQty > currentQty;
+      return (minQty > currentQty) || !!item.isMandatory;
     });
 
     if (itemsNeedingReplenishment.length === 0) {
-      messages.push("Todos os produtos do seu estoque já estão com a quantidade atual igual ou superior à quantidade mínima configurada. Nenhum item precisou ser lançado na lista de compras.");
+      messages.push("Todos os produtos do seu estoque já estão com a quantidade atual igual ou superior à quantidade mínima e nenhum foi marcado como obrigatório. Nenhum item precisou ser lançado na lista de compras.");
     } else {
       const currentMonthStr = new Date().toISOString().slice(0, 7);
 
       itemsNeedingReplenishment.forEach(item => {
         const minQty = Number(item.minQuantity) || 0;
         const currentQty = Number(item.quantity) || 0;
-        const neededQty = minQty - currentQty;
+        const rawMissing = Math.max(0, minQty - currentQty);
+
+        // Se for item obrigatório, a necessidade é pelo menos +1, ou a falta total se maior.
+        const neededQty = item.isMandatory ? Math.max(1, rawMissing) : rawMissing;
 
         const existingInMonth = shoppingList.filter(s => {
           const sMonth = s.month || currentMonthStr;
@@ -135,7 +151,7 @@ export const Inventory: React.FC<InventoryProps> = ({
 
         if (existingQty >= neededQty) {
           skippedCount++;
-          messages.push(`• "${item.name}": Já existem a quantidade de ${existingQty} ou mais produtos lançados na lista de compras de ${monthLabel}.`);
+          messages.push(`• "${item.name}": Já existem ${existingQty} produto(s) lançados na lista de compras de ${monthLabel} (necessário: ${neededQty}).`);
         } else {
           const toAdd = neededQty - existingQty;
           onAddToShoppingList({
@@ -147,10 +163,12 @@ export const Inventory: React.FC<InventoryProps> = ({
           });
           addedCount++;
 
-          if (existingQty === 0) {
-            messages.push(`• "${item.name}": Lançado(s) ${neededQty} ${item.unit} na lista de compras de ${monthLabel}.`);
+          if (item.isMandatory && rawMissing === 0) {
+            messages.push(`• "${item.name}" (Obrigatório): Lançado +${toAdd} ${item.unit} na lista de ${monthLabel} para manter reposição contínua.`);
+          } else if (existingQty === 0) {
+            messages.push(`• "${item.name}"${item.isMandatory ? ' (Obrigatório)' : ''}: Lançado(s) ${neededQty} ${item.unit} na lista de compras de ${monthLabel}.`);
           } else {
-            messages.push(`• "${item.name}": Já existiam ${existingQty} ${item.unit} na lista; adicionado saldo de +${toAdd} ${item.unit} em ${monthLabel}.`);
+            messages.push(`• "${item.name}"${item.isMandatory ? ' (Obrigatório)' : ''}: Já existiam ${existingQty} ${item.unit} na lista; adicionado saldo de +${toAdd} ${item.unit} em ${monthLabel}.`);
           }
         }
       });
@@ -186,7 +204,34 @@ export const Inventory: React.FC<InventoryProps> = ({
   const [itemUnit, setItemUnit] = useState('un');
   const [itemCategory, setItemCategory] = useState<ShoppingCategory>('Outros');
   const [itemMinQuantity, setItemMinQuantity] = useState<number>(1);
+  const [itemIsMandatory, setItemIsMandatory] = useState<boolean>(false);
   const [itemPersistedMonths, setItemPersistedMonths] = useState<number>(0);
+  const [showProductSuggestions, setShowProductSuggestions] = useState(false);
+
+  // Suggestions derived from registeredProducts
+  const productSuggestions = React.useMemo(() => {
+    if (!registeredProducts || registeredProducts.length === 0) return [];
+    const query = itemName.trim().toLowerCase();
+    if (!query) return registeredProducts.slice(0, 8);
+    return registeredProducts.filter(p =>
+      p.name.toLowerCase().includes(query) ||
+      (p.category && p.category.toLowerCase().includes(query))
+    ).slice(0, 8);
+  }, [registeredProducts, itemName]);
+
+  const selectedRegisteredProduct = React.useMemo(() => {
+    if (!registeredProducts || !itemName.trim()) return null;
+    return registeredProducts.find(
+      p => p.name.trim().toLowerCase() === itemName.trim().toLowerCase()
+    );
+  }, [registeredProducts, itemName]);
+
+  const handleSelectProductSuggestion = (prod: RegisteredProduct) => {
+    setItemName(prod.name);
+    if (prod.category) setItemCategory(prod.category as ShoppingCategory);
+    if (prod.unit) setItemUnit(prod.unit);
+    setShowProductSuggestions(false);
+  };
 
   const resetForm = () => {
     setItemName('');
@@ -194,8 +239,10 @@ export const Inventory: React.FC<InventoryProps> = ({
     setItemUnit('un');
     setItemCategory('Outros');
     setItemMinQuantity(1);
+    setItemIsMandatory(false);
     setItemPersistedMonths(0);
     setEditingItem(null);
+    setShowProductSuggestions(false);
   };
 
   const handleOpenAddModal = () => {
@@ -210,7 +257,9 @@ export const Inventory: React.FC<InventoryProps> = ({
     setItemUnit(item.unit);
     setItemCategory(item.category as ShoppingCategory);
     setItemMinQuantity(item.minQuantity || 0);
+    setItemIsMandatory(!!item.isMandatory);
     setItemPersistedMonths(item.persistedMonthsCount || 0);
+    setShowProductSuggestions(false);
     setIsModalOpen(true);
   };
 
@@ -227,8 +276,33 @@ export const Inventory: React.FC<InventoryProps> = ({
       unit: itemUnit,
       category: itemCategory,
       minQuantity: minQty,
+      isMandatory: itemIsMandatory,
       persistedMonthsCount: Number(itemPersistedMonths)
     };
+
+    // --- SINCRONIZAÇÃO AUTOMÁTICA COM O BANCO DE PRODUTOS (registeredProducts) ---
+    const trimmedNewName = itemData.name.toLowerCase();
+    const trimmedOldName = editingItem ? editingItem.name.trim().toLowerCase() : '';
+
+    const existingRegistered = registeredProducts?.find(
+      p => p.name.trim().toLowerCase() === trimmedNewName || (trimmedOldName && p.name.trim().toLowerCase() === trimmedOldName)
+    );
+
+    if (existingRegistered) {
+      if (onUpdateRegisteredProduct) {
+        onUpdateRegisteredProduct(existingRegistered.id, {
+          name: itemData.name,
+          category: itemData.category,
+          unit: itemData.unit,
+        });
+      }
+    } else if (onAddRegisteredProduct) {
+      onAddRegisteredProduct({
+        name: itemData.name,
+        category: itemData.category,
+        unit: itemData.unit,
+      });
+    }
 
     if (editingItem) {
       onUpdate(editingItem.id, itemData);
@@ -285,13 +359,18 @@ export const Inventory: React.FC<InventoryProps> = ({
   };
 
   const handleAddBackToShopping = (item: InventoryItem) => {
+    const minQty = Number(item.minQuantity) || 0;
+    const currentQty = Number(item.quantity) || 0;
+    const rawMissing = Math.max(0, minQty - currentQty);
+    const qtyToAdd = item.isMandatory
+      ? Math.max(1, rawMissing)
+      : (minQty && currentQty < minQty ? Math.max(1, rawMissing) : 1);
+
     onAddToShoppingList({
       name: item.name,
       category: item.category,
       unit: item.unit,
-      quantity: item.minQuantity && item.quantity < item.minQuantity 
-        ? Math.max(1, item.minQuantity - item.quantity) 
-        : 1
+      quantity: qtyToAdd
     });
   };
 
@@ -300,7 +379,7 @@ export const Inventory: React.FC<InventoryProps> = ({
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
     
-    const needsReplenish = item.minQuantity !== undefined && item.quantity < item.minQuantity;
+    const needsReplenish = (item.minQuantity !== undefined && item.quantity < item.minQuantity) || !!item.isMandatory;
     const matchesReplenish = filterReplenish === null || (filterReplenish === needsReplenish);
 
     return matchesSearch && matchesCategory && matchesReplenish;
@@ -617,16 +696,25 @@ export const Inventory: React.FC<InventoryProps> = ({
                           {item.category || 'Outros'}
                         </span>
                         
-                        <span className={`text-[10px] font-bold flex items-center gap-1 px-2 py-0.5 rounded-md ${statusDetails.classes}`}>
-                          {statusDetails.label === "Diminuir estoque" && <TrendingDown className="w-3 h-3" />}
-                          {statusDetails.label === "Aumentar estoque" && <AlertTriangle className="w-3 h-3" />}
-                          {statusDetails.label === "Estoque está bom" && <Check className="w-3 h-3" />}
-                          {statusDetails.label}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {item.isMandatory && (
+                            <span className="text-[10px] font-extrabold flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40">
+                              <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                              Obrigatório
+                            </span>
+                          )}
+                          <span className={`text-[10px] font-bold flex items-center gap-1 px-2 py-0.5 rounded-md ${statusDetails.classes}`}>
+                            {statusDetails.label === "Diminuir estoque" && <TrendingDown className="w-3 h-3" />}
+                            {statusDetails.label === "Aumentar estoque" && <AlertTriangle className="w-3 h-3" />}
+                            {statusDetails.label === "Estoque está bom" && <Check className="w-3 h-3" />}
+                            {statusDetails.label === "Obrigatório" && <Star className="w-3 h-3 fill-amber-500 text-amber-500" />}
+                            {statusDetails.label}
+                          </span>
+                        </div>
                       </div>
- 
-                      <h4 className="font-bold text-slate-800 dark:text-white text-base truncate">
-                        {privacyMode ? '••••••' : item.name}
+
+                      <h4 className="font-bold text-slate-800 dark:text-white text-base truncate flex items-center justify-between gap-2">
+                        <span>{privacyMode ? '••••••' : item.name}</span>
                       </h4>
                       
                       <div className="mt-2 text-xs text-slate-400 flex flex-col gap-1">
@@ -636,6 +724,12 @@ export const Inventory: React.FC<InventoryProps> = ({
                             {item.minQuantity ?? 0} {(item.unit || 'un').toUpperCase()}
                           </span>
                         </div>
+                        {item.isMandatory && (
+                          <div className="flex justify-between text-[10px] text-amber-700 dark:text-amber-400 font-semibold">
+                            <span>Regra de compra:</span>
+                            <span>Sempre pelo menos +1 (ou a falta se &gt; 1)</span>
+                          </div>
+                        )}
                         {item.persistedMonthsCount !== undefined && item.persistedMonthsCount > 0 && (
                           <div className="flex justify-between text-[10px] text-amber-600 dark:text-amber-400 font-medium">
                             <span>Persistência no Estoque:</span>
@@ -674,7 +768,18 @@ export const Inventory: React.FC<InventoryProps> = ({
 
                       {/* Actions */}
                       <div className="flex items-center gap-1.5">
-                        {(item.minQuantity !== undefined && item.quantity < item.minQuantity) && (
+                        <button
+                          onClick={() => onUpdate(item.id, { isMandatory: !item.isMandatory })}
+                          title={item.isMandatory ? "Remover marcação de item obrigatório" : "Marcar como item obrigatório nas compras (sempre repor +1)"}
+                          className={`p-2 rounded-xl transition-all border ${
+                            item.isMandatory
+                              ? "bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-800"
+                              : "text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-slate-700 border-transparent"
+                          }`}
+                        >
+                          <Star className={`w-4 h-4 ${item.isMandatory ? "fill-amber-500 text-amber-500" : ""}`} />
+                        </button>
+                        {((item.minQuantity !== undefined && item.quantity < item.minQuantity) || item.isMandatory) && (
                           <button
                             onClick={() => handleAddBackToShopping(item)}
                             title="Adicionar à lista de compras para reposição"
@@ -919,16 +1024,68 @@ export const Inventory: React.FC<InventoryProps> = ({
             </div>
 
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 ml-1">Nome do Item *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Arroz, Leite, Papel Higiênico..."
-                  value={itemName}
-                  onChange={(e) => setItemName(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+              <div className="relative">
+                <div className="flex items-center justify-between mb-1.5 ml-1">
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Nome do Item *
+                  </label>
+                  {selectedRegisteredProduct ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/40">
+                      <Sparkles className="w-3 h-3 text-emerald-500" />
+                      Vinculado ao Banco de Produtos
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      Sincroniza automático com Lista de Compras
+                    </span>
+                  )}
+                </div>
+                
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Arroz, Leite, Papel Higiênico..."
+                    value={itemName}
+                    onFocus={() => setShowProductSuggestions(true)}
+                    onChange={(e) => {
+                      setItemName(e.target.value);
+                      setShowProductSuggestions(true);
+                    }}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+
+                  {showProductSuggestions && productSuggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/50">
+                      <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900/60 text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center justify-between">
+                        <span>Sugestões do Banco de Produtos</span>
+                        <span>{productSuggestions.length} encontrado(s)</span>
+                      </div>
+                      {productSuggestions.map((prod) => (
+                        <button
+                          key={prod.id}
+                          type="button"
+                          onClick={() => handleSelectProductSuggestion(prod)}
+                          className="w-full text-left px-3.5 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors flex items-center justify-between gap-2 text-xs"
+                        >
+                          <span className="font-bold text-slate-800 dark:text-white truncate">
+                            {prod.name}
+                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {prod.category && (
+                              <span className="px-2 py-0.5 text-[9px] font-semibold rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                {prod.category}
+                              </span>
+                            )}
+                            <span className="text-[10px] font-mono text-slate-400">
+                              {prod.unit || 'un'}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -986,6 +1143,26 @@ export const Inventory: React.FC<InventoryProps> = ({
                     className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
+              </div>
+
+              <div className="mt-3 p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/40 rounded-xl">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={itemIsMandatory}
+                    onChange={(e) => setItemIsMandatory(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 text-amber-600 rounded border-amber-300 focus:ring-amber-500"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1">
+                      <Star className={`w-3.5 h-3.5 ${itemIsMandatory ? "fill-amber-500 text-amber-500" : "text-amber-500"}`} />
+                      Item de Compra Obrigatória (Sempre Repor)
+                    </span>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      Se marcado, ao lançar para a lista de compras ele sempre aparecerá (mínimo +1 ou a falta total se &gt; 1).
+                    </p>
+                  </div>
+                </label>
               </div>
 
               <div className="mt-3">
@@ -1064,24 +1241,25 @@ export const Inventory: React.FC<InventoryProps> = ({
               {/* Lista de Prévia de Itens que necessitam de reposição */}
               <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-200/60 dark:border-slate-700/60">
                 <h4 className="text-xs font-black text-slate-800 dark:text-white mb-3 flex items-center justify-between">
-                  <span>Itens abaixo da quantidade ideal no estoque:</span>
+                  <span>Itens para lançamento (faltantes / obrigatórios):</span>
                   <span className="text-[10px] text-slate-500 font-semibold">
-                    {items.filter(i => (Number(i.minQuantity) || 0) > Number(i.quantity || 0)).length} item(s)
+                    {items.filter(i => (Number(i.minQuantity) || 0) > Number(i.quantity || 0) || i.isMandatory).length} item(s)
                   </span>
                 </h4>
 
                 <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                  {items.filter(i => (Number(i.minQuantity) || 0) > Number(i.quantity || 0)).length === 0 ? (
+                  {items.filter(i => (Number(i.minQuantity) || 0) > Number(i.quantity || 0) || i.isMandatory).length === 0 ? (
                     <p className="text-xs text-slate-500 dark:text-slate-400 py-3 text-center italic">
-                      Todos os seus itens de estoque já atingiram ou superaram a quantidade ideal configurada.
+                      Todos os seus itens de estoque já atingiram a quantidade ideal e nenhum foi marcado como obrigatório.
                     </p>
                   ) : (
                     items
-                      .filter(i => (Number(i.minQuantity) || 0) > Number(i.quantity || 0))
+                      .filter(i => (Number(i.minQuantity) || 0) > Number(i.quantity || 0) || i.isMandatory)
                       .map(item => {
                         const minQty = Number(item.minQuantity) || 0;
                         const currentQty = Number(item.quantity) || 0;
-                        const neededQty = minQty - currentQty;
+                        const rawMissing = Math.max(0, minQty - currentQty);
+                        const neededQty = item.isMandatory ? Math.max(1, rawMissing) : rawMissing;
                         const currentMonthStr = new Date().toISOString().slice(0, 7);
 
                         const existingInMonth = shoppingList.filter(s => {
@@ -1103,18 +1281,31 @@ export const Inventory: React.FC<InventoryProps> = ({
                             className="bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between gap-2 text-xs"
                           >
                             <div>
-                              <span className="font-bold text-slate-800 dark:text-white block">
-                                {item.name}
-                              </span>
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className="font-bold text-slate-800 dark:text-white">
+                                  {item.name}
+                                </span>
+                                {item.isMandatory && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 flex items-center gap-0.5">
+                                    <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                                    Obrigatório
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                                Em estoque: <b>{currentQty}</b> / Mínimo ideal: <b>{minQty}</b> (Falta <b>{neededQty} {item.unit}</b>)
+                                Em estoque: <b>{currentQty}</b> / Mínimo: <b>{minQty}</b>
+                                {item.isMandatory && rawMissing === 0 ? (
+                                  <span className="text-amber-600 dark:text-amber-400 font-semibold ml-1">(Estoque ok, +1 obrigatório)</span>
+                                ) : (
+                                  <span className="ml-1">(Falta <b>{neededQty} {item.unit}</b>)</span>
+                                )}
                               </span>
                             </div>
 
                             <div className="shrink-0 text-right">
                               {existingQty >= neededQty ? (
                                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-900/50">
-                                  Já existe na lista ({existingQty} {item.unit})
+                                  Já existe ({existingQty} {item.unit})
                                 </span>
                               ) : existingQty === 0 ? (
                                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-900/50">

@@ -134,6 +134,7 @@ export interface InventoryItem {
   unit: string;
   category: string;
   minQuantity?: number; // Quantidade ideal ou mínima para reposição
+  isMandatory?: boolean; // Item obrigatório nas compras de estoque (sempre pelo menos +1)
   updatedAt?: string;
   firstAddedAt?: string;
   persistedMonthsCount?: number; // Quantidade de meses que persistiu no estoque
@@ -185,6 +186,7 @@ export interface KanbanCard {
   comments?: KanbanComment[];
   attachments?: KanbanAttachment[];
   subtasks?: KanbanSubtask[];
+  investmentId?: string; // ID da caixinha / investimento vinculado
 }
 
 export interface KanbanColumn {
@@ -504,6 +506,6 @@ export interface WorkGoal {
   unitValue?: number; // valor monetário por hora, minuto ou entrega (R$)
   startDate?: string;
   deadline?: string;
-  history?: { id: string; date: string; hours: number; notes?: string }[];
+  history?: { id: string; date: string; hours: number; notes?: string; value?: number }[];
   createdAt: string;
 }

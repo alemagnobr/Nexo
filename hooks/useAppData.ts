@@ -7,6 +7,7 @@ import {
   Budget,
   Debt,
   ShoppingItem,
+  ShoppingCategory,
   RegisteredProduct,
   InventoryItem,
   ReplenishmentLog,
@@ -600,14 +601,15 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
     }
   };
 
-  const addInvestment = async (inv: Omit<Investment, "id">) => {
-    const newInvestment: Investment = { ...inv, id: crypto.randomUUID() };
+  const addInvestment = async (inv: Omit<Investment, "id"> & { id?: string }) => {
+    const newInvestment: Investment = { ...inv, id: inv.id || crypto.randomUUID() };
     if (user) await addInvestmentFire(user.uid, newInvestment);
     else
       setData((prev) => ({
         ...prev,
         investments: [...prev.investments, newInvestment],
       }));
+    return newInvestment.id;
   };
 
   const updateInvestment = async (id: string, updates: Partial<Investment>) => {
@@ -739,14 +741,56 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
     id: string,
     updates: Partial<RegisteredProduct>,
   ) => {
+    const targetProduct = data.registeredProducts?.find(p => p.id === id);
+    const oldNameLower = targetProduct?.name.trim().toLowerCase();
+
     if (user) await updateRegisteredProductFire(user.uid, id, updates);
-    else
-      setData((prev) => ({
+    
+    setData((prev) => {
+      const updatedRegistered = (prev.registeredProducts || []).map((prod) =>
+        prod.id === id ? { ...prod, ...updates } : prod,
+      );
+
+      let updatedShopping = prev.shoppingList;
+      let updatedInventory = prev.inventoryList;
+
+      if (oldNameLower && (updates.name || updates.category || updates.unit)) {
+        const newName = updates.name?.trim() || targetProduct?.name;
+        const newCat = (updates.category || targetProduct?.category) as ShoppingCategory | undefined;
+        const newUnit = updates.unit || targetProduct?.unit;
+
+        updatedShopping = (prev.shoppingList || []).map(item => {
+          if (item.name.trim().toLowerCase() === oldNameLower) {
+            return {
+              ...item,
+              name: newName || item.name,
+              category: newCat || item.category,
+              unit: newUnit || item.unit,
+            };
+          }
+          return item;
+        });
+
+        updatedInventory = (prev.inventoryList || []).map(item => {
+          if (item.name.trim().toLowerCase() === oldNameLower) {
+            return {
+              ...item,
+              name: newName || item.name,
+              category: (newCat || item.category) as string,
+              unit: newUnit || item.unit,
+            };
+          }
+          return item;
+        });
+      }
+
+      return {
         ...prev,
-        registeredProducts: (prev.registeredProducts || []).map((prod) =>
-          prod.id === id ? { ...prod, ...updates } : prod,
-        ),
-      }));
+        registeredProducts: updatedRegistered,
+        shoppingList: updatedShopping,
+        inventoryList: updatedInventory,
+      };
+    });
   };
 
   const deleteRegisteredProduct = async (id: string) => {
@@ -764,6 +808,18 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
       id: crypto.randomUUID(),
       updatedAt: new Date().toISOString()
     };
+
+    // Auto sync to registeredProducts if not existing
+    const trimmedName = item.name.trim().toLowerCase();
+    const existingRegistered = data.registeredProducts?.find(p => p.name.trim().toLowerCase() === trimmedName);
+    if (!existingRegistered && item.name.trim()) {
+      addRegisteredProduct({
+        name: item.name.trim(),
+        category: item.category as ShoppingCategory,
+        unit: item.unit,
+      });
+    }
+
     if (user) await addInventoryItemFire(user.uid, newItem);
     else
       setData((prev) => ({
@@ -777,14 +833,56 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
     updates: Partial<InventoryItem>,
   ) => {
     const finalUpdates = { ...updates, updatedAt: new Date().toISOString() };
+    const targetItem = data.inventoryList?.find(i => i.id === id);
+    const oldNameLower = targetItem?.name.trim().toLowerCase();
+
     if (user) await updateInventoryItemFire(user.uid, id, finalUpdates);
-    else
-      setData((prev) => ({
+
+    setData((prev) => {
+      const updatedInventory = (prev.inventoryList || []).map((item) =>
+        item.id === id ? { ...item, ...finalUpdates } : item,
+      );
+
+      let updatedRegistered = prev.registeredProducts;
+      let updatedShopping = prev.shoppingList;
+
+      if (oldNameLower && (updates.name || updates.category || updates.unit)) {
+        const newName = updates.name?.trim() || targetItem?.name;
+        const newCat = (updates.category || targetItem?.category) as ShoppingCategory | undefined;
+        const newUnit = updates.unit || targetItem?.unit;
+
+        updatedRegistered = (prev.registeredProducts || []).map(prod => {
+          if (prod.name.trim().toLowerCase() === oldNameLower) {
+            return {
+              ...prod,
+              name: newName || prod.name,
+              category: (newCat || prod.category) as ShoppingCategory,
+              unit: newUnit || prod.unit,
+            };
+          }
+          return prod;
+        });
+
+        updatedShopping = (prev.shoppingList || []).map(item => {
+          if (item.name.trim().toLowerCase() === oldNameLower) {
+            return {
+              ...item,
+              name: newName || item.name,
+              category: newCat || item.category,
+              unit: newUnit || item.unit,
+            };
+          }
+          return item;
+        });
+      }
+
+      return {
         ...prev,
-        inventoryList: (prev.inventoryList || []).map((item) =>
-          item.id === id ? { ...item, ...finalUpdates } : item,
-        ),
-      }));
+        inventoryList: updatedInventory,
+        registeredProducts: updatedRegistered,
+        shoppingList: updatedShopping,
+      };
+    });
   };
 
   const deleteInventoryItem = async (id: string) => {

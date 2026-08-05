@@ -653,23 +653,33 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
                         </select>
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Saldo Atual</label>
-                        <CurrencyInput
-                          required
-                          value={formData.balance}
-                          onChangeValue={val => setFormData({ ...formData, balance: parseFloat(val) || 0 })}
-                          className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
-                        />
-                      </div>
+                      {formData.type !== WalletType.CREDIT_CARD ? (
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Saldo Atual</label>
+                          <CurrencyInput
+                            required
+                            value={formData.balance}
+                            onChangeValue={val => setFormData({ ...formData, balance: parseFloat(val) || 0 })}
+                            className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Saldo em Conta</label>
+                          <div className="w-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-xl p-3 text-sm font-semibold">
+                            R$ 0,00 (Operado via Limite)
+                          </div>
+                        </div>
+                      )}
 
                       {formData.type === WalletType.CREDIT_CARD && (
                         <>
                           <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Limite Total</label>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Limite Total do Cartão</label>
                             <CurrencyInput
+                              required
                               value={formData.creditLimit || 0}
-                              onChangeValue={val => setFormData({ ...formData, creditLimit: parseFloat(val) || 0 })}
+                              onChangeValue={val => setFormData({ ...formData, creditLimit: parseFloat(val) || 0, balance: 0 })}
                               className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
                             />
                           </div>

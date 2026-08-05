@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { AppData, Badge, Budget, View, WalletType } from '../types';
-import { Wallet, TrendingUp, AlertCircle, Target, Download, Trophy, CheckCheck, Layers, Crown, TrendingDown, Calendar, BarChart3, ShieldAlert, BadgeAlert, Scale, ArrowRight, ArrowLeft, Settings2, CalendarClock, DollarSign, PieChart as PieChartIcon, ChevronDown, Bell, X, Activity, Clock, ArrowDownCircle, StickyNote, CheckCircle2, Circle, Grid, Edit2, Timer, Play, Dumbbell, Apple, Key, ShoppingCart, KeyRound, QrCode, FileText, CheckSquare, CreditCard, Briefcase } from 'lucide-react';
+import { Wallet, TrendingUp, AlertCircle, Target, Download, Trophy, CheckCheck, Layers, Crown, TrendingDown, Calendar, BarChart3, ShieldAlert, BadgeAlert, Scale, ArrowRight, ArrowLeft, Settings2, CalendarClock, DollarSign, PieChart as PieChartIcon, ChevronDown, Bell, X, Activity, Clock, ArrowDownCircle, StickyNote, CheckCircle2, Circle, Grid, Edit2, Timer, Play, Dumbbell, Apple, Key, ShoppingCart, KeyRound, QrCode, FileText, CheckSquare, CreditCard, Briefcase, Receipt, Repeat, LineChart, Landmark, Package, Sparkles, MessageSquareMore, Settings, LayoutDashboard } from 'lucide-react';
 
 interface DashboardProps {
   data: AppData;
@@ -128,6 +128,47 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onNavigate, 
   onToggleHabitEntry,
 }) => {
+  const [activeAppCategory, setActiveAppCategory] = useState<string>('todos');
+
+  const ALL_APPS = useMemo(() => [
+    // Financeiro
+    { id: View.FINANCEIRO_DASHBOARD, icon: BarChart3, label: 'Visão Geral Financeira', category: 'financeiro', iconBg: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400', desc: 'Resumo & Gráficos' },
+    { id: View.TRANSACTIONS, icon: Receipt, label: 'Transações', category: 'financeiro', iconBg: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400', desc: 'Extrato e Contas' },
+    { id: View.WALLETS, icon: Wallet, label: 'Carteiras & Bancos', category: 'financeiro', iconBg: 'bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400', desc: 'Saldos e Cartões' },
+    { id: View.SUBSCRIPTIONS, icon: Repeat, label: 'Assinaturas', category: 'financeiro', iconBg: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400', desc: 'Contas Recorrentes' },
+    { id: View.DEBTS, icon: ShieldAlert, label: 'Dívidas', category: 'financeiro', iconBg: 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400', desc: 'Negociações' },
+    { id: View.INVESTMENTS, icon: LineChart, label: 'Investimentos', category: 'financeiro', iconBg: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400', desc: 'Carteira & Caixinhas' },
+    { id: View.BUDGETS, icon: Target, label: 'Orçamentos', category: 'financeiro', iconBg: 'bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400', desc: 'Limites por Categoria' },
+    { id: View.WEALTH_PLANNER, icon: Landmark, label: 'Aposentadoria', category: 'financeiro', iconBg: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400', desc: 'Simulador Futuro' },
+    { id: View.PIX_KEYS, icon: QrCode, label: 'Chaves Pix', category: 'financeiro', iconBg: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400', desc: 'Gerenciar Chaves' },
+
+    // Compras & Casa
+    { id: View.SHOPPING_LIST, icon: ShoppingCart, label: 'Lista de Compras', category: 'compras', iconBg: 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400', desc: 'Mercado & Feira' },
+    { id: View.INVENTORY, icon: Package, label: 'Estoque & Despensa', category: 'compras', iconBg: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400', desc: 'Despensa & Produtos' },
+    { id: View.KANBAN, icon: Sparkles, label: 'Sonhos de Consumo', category: 'compras', iconBg: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400', desc: 'Desejos & Projetos' },
+
+    // Planejamento & Produtividade
+    { id: View.PLANEJAMENTO_DASHBOARD, icon: LayoutDashboard, label: 'Visão Geral Planejamento', category: 'planejamento', iconBg: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400', desc: 'Produtividade' },
+    { id: View.CALENDAR, icon: CalendarClock, label: 'Agenda', category: 'planejamento', iconBg: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400', desc: 'Eventos & Lembretes' },
+    { id: View.PRODUCTIVITY, icon: CheckSquare, label: 'Hábitos', category: 'planejamento', iconBg: 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400', desc: 'Rastreio Diário' },
+    { id: View.DAILY_ROUTINES, icon: Clock, label: 'Rotinas Diárias', category: 'planejamento', iconBg: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400', desc: 'Checklists' },
+    { id: View.NOTES, icon: StickyNote, label: 'NEXO Notes', category: 'planejamento', iconBg: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400', desc: 'Bloco de Anotações' },
+    { id: View.WORK_GOALS, icon: Briefcase, label: 'Metas de Trabalho', category: 'planejamento', iconBg: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400', desc: 'Horas & Progresso' },
+    { id: View.PASSWORDS, icon: KeyRound, label: 'Cofre de Senhas', category: 'planejamento', iconBg: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300', desc: 'Segurança' },
+
+    // Saúde & IA
+    { id: View.SAUDE_DASHBOARD, icon: Activity, label: 'Visão Geral Saúde', category: 'saude', iconBg: 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400', desc: 'Resumo de Saúde' },
+    { id: View.TREINO, icon: Dumbbell, label: 'Treino & Saúde', category: 'saude', iconBg: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400', desc: 'Exercícios & Ficha' },
+    { id: View.AI_ASSISTANT, icon: MessageSquareMore, label: 'Assistente IA', category: 'saude', iconBg: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400', desc: 'Inteligência Nexo' },
+
+    // Configurações
+    { id: View.SETTINGS, icon: Settings, label: 'Configurações', category: 'todos', iconBg: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300', desc: 'Preferências & Dados' },
+  ], []);
+
+  const filteredApps = useMemo(() => {
+    if (activeAppCategory === 'todos') return ALL_APPS;
+    return ALL_APPS.filter(app => app.category === activeAppCategory);
+  }, [ALL_APPS, activeAppCategory]);
   
   // Greeting Logic
   const greeting = useMemo(() => {
@@ -647,33 +688,55 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* --- MEUS APLICATIVOS --- */}
-      <div className="space-y-4">
-          <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider mb-2">Meus Aplicativos</h2>
+      <div className="space-y-4 pt-2">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                  <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Meus Aplicativos</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Acesso rápido a todos os módulos do NEXO Smart Life Planner.</p>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700/60 text-xs">
+                  {[
+                      { id: 'todos', label: 'Todos', count: ALL_APPS.length },
+                      { id: 'financeiro', label: 'Financeiro', count: ALL_APPS.filter(a => a.category === 'financeiro').length },
+                      { id: 'compras', label: 'Compras', count: ALL_APPS.filter(a => a.category === 'compras').length },
+                      { id: 'planejamento', label: 'Planejamento', count: ALL_APPS.filter(a => a.category === 'planejamento').length },
+                      { id: 'saude', label: 'Saúde & IA', count: ALL_APPS.filter(a => a.category === 'saude').length },
+                  ].map(cat => (
+                      <button
+                          key={cat.id}
+                          onClick={() => setActiveAppCategory(cat.id)}
+                          className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                              activeAppCategory === cat.id
+                                  ? 'bg-indigo-600 text-white shadow-sm'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50'
+                          }`}
+                      >
+                          <span>{cat.label}</span>
+                          <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-bold ${
+                              activeAppCategory === cat.id ? 'bg-indigo-500/80 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                          }`}>
+                              {cat.count}
+                          </span>
+                      </button>
+                  ))}
+              </div>
+          </div>
           
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {[
-                  { id: View.CALENDAR, icon: CalendarClock, label: 'Calendário', color: 'indigo', desc: 'Eventos' },
-                  { id: View.KANBAN, icon: Layers, label: 'Kanban', color: 'purple', desc: 'Projetos' },
-                  { id: View.BUDGETS, icon: Target, label: 'Orçamentos', color: 'rose', desc: 'Limites' },
-                  { id: View.PRODUCTIVITY, icon: Target, label: 'Hábitos', color: 'emerald', desc: 'Rastreio' },
-                  { id: View.WORK_GOALS, icon: TrendingUp, label: 'Metas', color: 'emerald', desc: 'Trabalho' },
-                  { id: View.NOTES, icon: StickyNote, label: 'Notas', color: 'amber', desc: 'Anotações' },
-                  { id: View.SHOPPING_LIST, icon: ShoppingCart, label: 'Compras', color: 'sky', desc: 'Mercado' },
-                  { id: View.PASSWORDS, icon: KeyRound, label: 'Senhas', color: 'slate', desc: 'Cofre' },
-                  { id: View.PIX_KEYS, icon: QrCode, label: 'Chaves Pix', color: 'teal', desc: 'Gerenciar' },
-                  { id: View.TREINO, icon: Dumbbell, label: 'Treino', color: 'orange', desc: 'Atividades' },
-              ].map(app => (
+              {filteredApps.map(app => (
                   <div 
                       key={app.id} 
                       onClick={() => onNavigate(app.id as View)}
-                      className="bg-white dark:bg-slate-800 p-3 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all flex items-center gap-3 group"
+                      className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/80 cursor-pointer hover:shadow-md hover:border-indigo-500/50 dark:hover:border-indigo-500/50 transition-all flex items-center gap-3 group"
                   >
-                      <div className={`p-2 rounded-lg bg-${app.color}-100 text-${app.color}-600 dark:bg-${app.color}-900/30 dark:text-${app.color}-400 group-hover:scale-110 transition-transform`}>
+                      <div className={`p-2.5 rounded-xl ${app.iconBg} group-hover:scale-110 transition-transform shrink-0`}>
                           <app.icon className="w-4 h-4" />
                       </div>
                       <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-800 dark:text-white truncate">{app.label}</p>
-                          <p className="text-[9px] font-medium text-slate-400 uppercase tracking-wider truncate">{app.desc}</p>
+                          <p className="text-xs font-bold text-slate-800 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{app.label}</p>
+                          <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 truncate">{app.desc}</p>
                       </div>
                   </div>
               ))}

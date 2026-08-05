@@ -77,9 +77,10 @@ export const WorkGoalsView: React.FC<WorkGoalsViewProps> = ({
     isOpen: boolean;
     goalId: string | null;
     quantity: string;
+    customValue: string;
     notes: string;
     date: string;
-  }>({ isOpen: false, goalId: null, quantity: "", notes: "", date: "" });
+  }>({ isOpen: false, goalId: null, quantity: "", customValue: "", notes: "", date: "" });
   const [selectedGoalHistoryId, setSelectedGoalHistoryId] = useState<
     string | null
   >(null);
@@ -167,6 +168,7 @@ export const WorkGoalsView: React.FC<WorkGoalsViewProps> = ({
 
     const goal = goals.find((g) => g.id === isAddQtyModalOpen.goalId);
     if (goal) {
+      const customVal = isAddQtyModalOpen.customValue.trim() !== "" ? parseFloat(isAddQtyModalOpen.customValue) : undefined;
       const entryDate = isAddQtyModalOpen.date
         ? new Date(isAddQtyModalOpen.date + "T12:00:00").toISOString()
         : new Date().toISOString();
@@ -175,6 +177,7 @@ export const WorkGoalsView: React.FC<WorkGoalsViewProps> = ({
         date: entryDate,
         hours: qty, // reusing hours field for quantity
         notes: isAddQtyModalOpen.notes,
+        value: customVal !== undefined && !isNaN(customVal) ? customVal : undefined,
       };
 
       const currentHistory = goal.history || [];
@@ -191,6 +194,7 @@ export const WorkGoalsView: React.FC<WorkGoalsViewProps> = ({
       isOpen: false,
       goalId: null,
       quantity: "",
+      customValue: "",
       notes: "",
       date: "",
     });
@@ -231,7 +235,7 @@ export const WorkGoalsView: React.FC<WorkGoalsViewProps> = ({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {goals?.map((goal) => {
           const unit = getUnitDetails(goal.unitType);
           const UnitIcon = unit.icon;
@@ -239,9 +243,12 @@ export const WorkGoalsView: React.FC<WorkGoalsViewProps> = ({
           const completedQty = goal.completedHours || 0;
           const progress = targetQty > 0 ? Math.min((completedQty / targetQty) * 100, 100) : 0;
           const unitValue = goal.unitValue || 0;
-          const totalTargetValue = targetQty * unitValue;
-          const totalCompletedValue = completedQty * unitValue;
-          const remainingValue = Math.max(0, totalTargetValue - totalCompletedValue);
+          const totalCompletedValue = (goal.history && goal.history.length > 0)
+            ? goal.history.reduce((acc, h) => acc + (h.value ?? (h.hours * unitValue)), 0)
+            : (completedQty * unitValue);
+          const remainingQty = Math.max(0, targetQty - completedQty);
+          const totalTargetValue = totalCompletedValue + (remainingQty * unitValue);
+          const remainingValue = remainingQty * unitValue;
 
           return (
             <div
@@ -453,6 +460,7 @@ export const WorkGoalsView: React.FC<WorkGoalsViewProps> = ({
                       isOpen: true,
                       goalId: goal.id,
                       quantity: "",
+                      customValue: "",
                       notes: "",
                       date: "",
                     })
@@ -647,6 +655,72 @@ export const WorkGoalsView: React.FC<WorkGoalsViewProps> = ({
                 </div>
               </div>
 
+              {/* Live Rate Preview per Day / Week */}
+              {(() => {
+                const targetQty = parseFloat(formData.targetQuantity) || 0;
+                if (targetQty <= 0) return null;
+
+                const unit = getUnitDetails(formData.unitType);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                let startD = today;
+                if (formData.startDate) {
+                  const s = new Date(formData.startDate + "T12:00:00");
+                  if (!isNaN(s.getTime())) {
+                    s.setHours(0, 0, 0, 0);
+                    startD = s;
+                  }
+                }
+
+                let totalDays = 0;
+                if (formData.deadline) {
+                  const dl = new Date(formData.deadline + "T12:00:00");
+                  if (!isNaN(dl.getTime())) {
+                    dl.setHours(0, 0, 0, 0);
+                    const diffMs = dl.getTime() - startD.getTime();
+                    totalDays = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+                  }
+                }
+
+                if (totalDays <= 0) return null;
+
+                const qtyPerDay = targetQty / totalDays;
+                const qtyPerWeek = totalDays >= 7 ? qtyPerDay * 7 : targetQty;
+
+                return (
+                  <div className="p-3 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-xl space-y-1.5 text-xs animate-fade-in">
+                    <div className="flex items-center justify-between text-blue-900 dark:text-blue-300 font-bold">
+                      <span className="flex items-center gap-1.5">
+                        <CalendarDays className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        Ritmo Calculado ({unit.label}):
+                      </span>
+                      <span className="bg-blue-200/60 dark:bg-blue-900/60 px-2 py-0.5 rounded text-[11px]">
+                        {totalDays} {totalDays === 1 ? "dia total" : "dias totais"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-blue-200/50 dark:border-blue-800/40">
+                      <div className="bg-white/80 dark:bg-slate-800/80 p-2 rounded-lg border border-blue-100 dark:border-blue-900/40">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block">
+                          Necessário por Dia
+                        </span>
+                        <span className="text-sm font-black text-blue-600 dark:text-blue-400">
+                          {qtyPerDay >= 10 ? qtyPerDay.toFixed(1) : qtyPerDay.toFixed(2)} {unit.short}/dia
+                        </span>
+                      </div>
+                      <div className="bg-white/80 dark:bg-slate-800/80 p-2 rounded-lg border border-blue-100 dark:border-blue-900/40">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block">
+                          Ritmo Semanal
+                        </span>
+                        <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">
+                          {qtyPerWeek >= 10 ? qtyPerWeek.toFixed(1) : qtyPerWeek.toFixed(2)} {unit.short}/sem
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
@@ -707,9 +781,41 @@ export const WorkGoalsView: React.FC<WorkGoalsViewProps> = ({
                       />
                     </div>
 
-                    {unitVal > 0 && addedQty > 0 && (
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase mb-1 flex items-center justify-between">
+                        <span>Valor Real Total (R$) (Opcional)</span>
+                        {addedQty > 0 && unitVal > 0 && (
+                          <span className="text-[10px] text-slate-400 font-normal">
+                            Estimado: {formatCurrency(addedQty * unitVal)}
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-semibold"
+                        value={isAddQtyModalOpen.customValue}
+                        onChange={(e) =>
+                          setIsAddQtyModalOpen((prev) => ({
+                            ...prev,
+                            customValue: e.target.value,
+                          }))
+                        }
+                        placeholder={
+                          unitVal > 0 && addedQty > 0
+                            ? `Ex: ${(addedQty * unitVal).toFixed(2)} (vazio = usar estimado)`
+                            : "Ex: 150.00"
+                        }
+                      />
+                    </div>
+
+                    {addedQty > 0 && (
                       <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold text-emerald-800 dark:text-emerald-300 text-center">
-                        + {formatCurrency(addedValue)} no valor acumulado
+                        {isAddQtyModalOpen.customValue.trim() !== "" && !isNaN(parseFloat(isAddQtyModalOpen.customValue))
+                          ? `+ ${formatCurrency(parseFloat(isAddQtyModalOpen.customValue))} (Valor Real Informado)`
+                          : unitVal > 0
+                          ? `+ ${formatCurrency(addedQty * unitVal)} (Valor Estimado)`
+                          : `+ ${addedQty} ${unit.short}`}
                       </div>
                     )}
 
@@ -755,6 +861,7 @@ export const WorkGoalsView: React.FC<WorkGoalsViewProps> = ({
                             isOpen: false,
                             goalId: null,
                             quantity: "",
+                            customValue: "",
                             notes: "",
                             date: "",
                           })
@@ -787,8 +894,11 @@ export const WorkGoalsView: React.FC<WorkGoalsViewProps> = ({
               if (!goal) return null;
               const unit = getUnitDetails(goal.unitType);
               const unitVal = goal.unitValue || 0;
-              const totalTargetVal = (goal.targetHours || 0) * unitVal;
-              const totalCompletedVal = (goal.completedHours || 0) * unitVal;
+              const totalCompletedVal = (goal.history && goal.history.length > 0)
+                ? goal.history.reduce((acc, h) => acc + (h.value ?? (h.hours * unitVal)), 0)
+                : ((goal.completedHours || 0) * unitVal);
+              const remainingQtyHistory = Math.max(0, (goal.targetHours || 0) - (goal.completedHours || 0));
+              const totalTargetVal = totalCompletedVal + (remainingQtyHistory * unitVal);
 
               return (
                 <>
@@ -848,11 +958,15 @@ export const WorkGoalsView: React.FC<WorkGoalsViewProps> = ({
                                 <span className="font-bold text-emerald-600 dark:text-emerald-400">
                                   +{h.hours} {unit.short}
                                 </span>
-                                {unitVal > 0 && (
-                                  <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200/50 dark:border-emerald-800/40">
-                                    {formatCurrency(h.hours * unitVal)}
-                                  </span>
-                                )}
+                                {(() => {
+                                  const itemVal = h.value ?? (h.hours * unitVal);
+                                  if (itemVal <= 0 && unitVal <= 0 && h.value === undefined) return null;
+                                  return (
+                                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200/50 dark:border-emerald-800/40">
+                                      {formatCurrency(itemVal)} {h.value !== undefined ? "(Real)" : ""}
+                                    </span>
+                                  );
+                                })()}
                                 <span className="text-[10px] text-slate-400 font-medium bg-slate-50 dark:bg-slate-700 px-1.5 py-0.5 rounded">
                                   {new Date(h.date).toLocaleDateString(
                                     "pt-BR",

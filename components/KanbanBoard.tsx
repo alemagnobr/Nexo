@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { KanbanColumn, KanbanCard, Transaction, TransactionType, KanbanBoard as IKanbanBoard, KanbanTag, KanbanComment, KanbanAttachment } from '../types';
-import { Plus, X, GripVertical, CheckCircle2, MoreHorizontal, Flag, Wallet, Edit2, Sparkles, Layout, Trash2, ChevronDown, ChevronLeft, ChevronRight, Tag, Calendar, MessageSquare, Clock, Send, AlertCircle, Link as LinkIcon, ExternalLink, ArrowUp, ArrowDown, GripHorizontal, AlignLeft, CheckSquare } from 'lucide-react';
+import { KanbanColumn, KanbanCard, Transaction, TransactionType, KanbanBoard as IKanbanBoard, KanbanTag, KanbanComment, KanbanAttachment, Investment, View } from '../types';
+import { Plus, X, GripVertical, CheckCircle2, MoreHorizontal, Flag, Wallet, Edit2, Sparkles, Layout, Trash2, ChevronDown, ChevronLeft, ChevronRight, Tag, Calendar, MessageSquare, Clock, Send, AlertCircle, Link as LinkIcon, ExternalLink, ArrowUp, ArrowDown, GripHorizontal, AlignLeft, CheckSquare, PiggyBank, Coins } from 'lucide-react';
 import { CurrencyInput } from './CurrencyInput';
 
 interface KanbanBoardProps {
@@ -10,6 +10,10 @@ interface KanbanBoardProps {
   onDeleteBoard: (id: string) => void;
   onAddTransaction: (t: Omit<Transaction, 'id'>) => void;
   privacyMode: boolean;
+  investments?: Investment[];
+  onAddInvestment?: (inv: Omit<Investment, 'id'> & { id?: string }) => Promise<any> | void;
+  onUpdateInvestment?: (id: string, updates: Partial<Investment>) => Promise<any> | void;
+  onNavigate?: (view: View) => void;
 }
 
 const COLORS = [
@@ -79,13 +83,67 @@ const COLUMN_THEMES = [
     }
 ];
 
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({ boards, onSaveBoard, onDeleteBoard, onAddTransaction, privacyMode }) => {
+export const KanbanBoard: React.FC<KanbanBoardProps> = ({ 
+  boards, 
+  onSaveBoard, 
+  onDeleteBoard, 
+  onAddTransaction, 
+  privacyMode,
+  investments = [],
+  onAddInvestment,
+  onUpdateInvestment,
+  onNavigate
+}) => {
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
   const [newBoardTitle, setNewBoardTitle] = useState('');
   const [isCreatingBoard, setIsCreatingBoard] = useState(false);
 
   const [newColumnTitle, setNewColumnTitle] = useState('');
   const [addingCardToColumn, setAddingCardToColumn] = useState<string | null>(null);
+
+  const handleCreateCaixinhaForCard = (colId: string, card: KanbanCard) => {
+    const newInvId = crypto.randomUUID();
+    const targetVal = card.amount || 0;
+    const newInv: Investment = {
+      id: newInvId,
+      name: `Caixinha: ${card.title}`,
+      amount: 0,
+      investedAmount: 0,
+      targetAmount: targetVal,
+      type: 'Caixinha',
+      date: new Date().toISOString().split('T')[0],
+      institution: 'Nexo Caixinha'
+    };
+    if (onAddInvestment) {
+      onAddInvestment(newInv);
+    }
+
+    if (!activeBoard) return;
+    const updatedCols = activeBoard.columns.map(c => {
+      if (c.id === colId) {
+        return {
+          ...c,
+          cards: c.cards.map(cd => cd.id === card.id ? { ...cd, investmentId: newInvId } : cd)
+        };
+      }
+      return c;
+    });
+    saveColumns(updatedCols);
+  };
+
+  const handleLinkInvestmentToCard = (colId: string, cardId: string, investmentId: string) => {
+    if (!activeBoard) return;
+    const updatedCols = activeBoard.columns.map(c => {
+      if (c.id === colId) {
+        return {
+          ...c,
+          cards: c.cards.map(cd => cd.id === cardId ? { ...cd, investmentId: investmentId || undefined } : cd)
+        };
+      }
+      return c;
+    });
+    saveColumns(updatedCols);
+  };
   
   // New Card State
   const [newCardTitle, setNewCardTitle] = useState('');
@@ -651,7 +709,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ boards, onSaveBoard, o
   const sortedColumns = activeBoard ? [...activeBoard.columns].sort((a, b) => a.order - b.order) : [];
 
   return (
-    <div className="h-[calc(100vh-140px)] flex flex-col animate-fade-in">
+    <div className="h-[calc(100vh-100px)] min-h-[750px] flex flex-col animate-fade-in">
       
       {/* HEADER: Title & Global Actions */}
       <div className="flex justify-between items-center mb-4 shrink-0">
@@ -781,7 +839,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ boards, onSaveBoard, o
                       draggable={!isTouchDevice && editingColumn?.id !== col.id}
                       onDragStart={(e) => handleColDragStart(e, col.id)}
                       onDragEnd={handleColDragEnd}
-                      className={`w-72 flex flex-col rounded-xl border backdrop-blur-sm transition-colors ${theme.wrapper} ${draggedCard && draggedCard.sourceColId !== col.id ? 'opacity-50 border-dashed' : 'shadow-sm'} ${draggedColumnId === col.id ? 'opacity-30 border-dashed' : ''}`}
+                      className={`w-80 md:w-[420px] flex flex-col rounded-xl border backdrop-blur-sm transition-colors ${theme.wrapper} ${draggedCard && draggedCard.sourceColId !== col.id ? 'opacity-50 border-dashed' : 'shadow-sm'} ${draggedColumnId === col.id ? 'opacity-30 border-dashed' : ''}`}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleColDrop(e, col.id)}
                   >
@@ -1015,7 +1073,66 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ boards, onSaveBoard, o
                                                   </div>
                                               </div>
 
-                                              {/* Move to Column (Always Visible) */}
+                                              {/* Caixinha de Economia / Vinculada */}
+                                               {(() => {
+                                                   const linkedInv = investments.find(i => i.id === card.investmentId);
+                                                   if (linkedInv) {
+                                                       const target = linkedInv.targetAmount || card.amount || 0;
+                                                       const current = linkedInv.amount || 0;
+                                                       const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
+                                                       return (
+                                                           <div className="mt-2.5 p-2 bg-emerald-50/90 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800/60 text-xs space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                                                               <div className="flex items-center justify-between gap-1 text-[11px] font-bold text-emerald-900 dark:text-emerald-200">
+                                                                   <span className="flex items-center gap-1.5 truncate">
+                                                                       <PiggyBank className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                                                       <span className="truncate">{linkedInv.name}</span>
+                                                                   </span>
+                                                                   <span className="text-[10px] px-1.5 py-0.5 bg-emerald-200/80 dark:bg-emerald-800/80 text-emerald-800 dark:text-emerald-200 rounded-md shrink-0 font-extrabold">
+                                                                       {pct}%
+                                                                   </span>
+                                                               </div>
+
+                                                               <div className="flex justify-between items-center text-[10px] text-slate-600 dark:text-slate-300 font-medium">
+                                                                   <span>Atual: <strong className="text-emerald-700 dark:text-emerald-400">{formatValue(current)}</strong></span>
+                                                                   <span>Meta: <strong className="text-slate-700 dark:text-slate-200">{formatValue(target)}</strong></span>
+                                                               </div>
+
+                                                               <div className="w-full bg-emerald-200/60 dark:bg-emerald-900/60 rounded-full h-1.5 overflow-hidden">
+                                                                   <div className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%` }}></div>
+                                                               </div>
+
+                                                               <button
+                                                                   type="button"
+                                                                   onClick={(e) => {
+                                                                       e.stopPropagation();
+                                                                       if (onNavigate) onNavigate(View.INVESTMENTS);
+                                                                   }}
+                                                                   className="w-full mt-1 py-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-all shadow-xs cursor-pointer active:scale-95"
+                                                               >
+                                                                   <PiggyBank className="w-3 h-3" />
+                                                                   <span>Ir para a Caixinha</span>
+                                                                   <ExternalLink className="w-3 h-3 ml-auto opacity-80" />
+                                                               </button>
+                                                           </div>
+                                                       );
+                                                   }
+                                                   return (
+                                                       <button
+                                                           type="button"
+                                                           onClick={(e) => {
+                                                               e.stopPropagation();
+                                                               handleCreateCaixinhaForCard(col.id, card);
+                                                           }}
+                                                           className="mt-2.5 w-full py-1.5 px-2 bg-indigo-50/70 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-xl text-[11px] font-bold border border-indigo-200/60 dark:border-indigo-800/60 flex items-center justify-center gap-1.5 transition-all cursor-pointer group/btn"
+                                                           title="Criar caixinha de guardar dinheiro vinculada a este sonho"
+                                                       >
+                                                           <PiggyBank className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 group-hover/btn:scale-110 transition-transform" />
+                                                           <span>Criar Caixinha de Dinheiro</span>
+                                                       </button>
+                                                   );
+                                               })()}
+
+                                               {/* Move to Column (Always Visible) */}
                                               <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-600">
                                                   <select 
                                                       value={col.id}
@@ -1205,7 +1322,117 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ boards, onSaveBoard, o
                           </div>
                       )}
 
-                      {/* Description */}
+                      {/* Caixinha de Economia / Investimento Section */}
+                       <div className="flex items-start gap-4 mb-6">
+                           <PiggyBank className="w-6 h-6 text-emerald-600 dark:text-emerald-400 mt-1 shrink-0" />
+                           <div className="flex-1 w-full">
+                               <div className="flex items-center justify-between mb-3">
+                                   <h3 className="font-bold text-slate-800 dark:text-white text-lg flex items-center gap-2">
+                                       Caixinha de Economia
+                                   </h3>
+                                   {onNavigate && (
+                                       <button 
+                                           onClick={() => onNavigate(View.INVESTMENTS)}
+                                           className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                                       >
+                                           Ir a Investimentos <ExternalLink className="w-3 h-3" />
+                                       </button>
+                                   )}
+                               </div>
+
+                               {(() => {
+                                   const linkedInv = investments.find(i => i.id === activeExpandedData.card.investmentId);
+                                   if (linkedInv) {
+                                       const target = linkedInv.targetAmount || activeExpandedData.card.amount || 0;
+                                       const current = linkedInv.amount || 0;
+                                       const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
+                                       return (
+                                           <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200 dark:border-emerald-800/50 space-y-3">
+                                               <div className="flex justify-between items-center">
+                                                   <div>
+                                                       <h4 className="font-bold text-slate-900 dark:text-white text-sm">{linkedInv.name}</h4>
+                                                       <p className="text-xs text-slate-500 dark:text-slate-400">Vinculada aos Investimentos</p>
+                                                   </div>
+                                                   <span className="px-2.5 py-1 text-xs font-black rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">
+                                                       {pct}% Alcançado
+                                                   </span>
+                                               </div>
+
+                                               <div className="grid grid-cols-2 gap-3 pt-1">
+                                                   <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                                                       <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block">Guardado Atual</span>
+                                                       <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">{formatValue(current)}</span>
+                                                   </div>
+                                                   <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                                                       <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block">Meta Final</span>
+                                                       <span className="text-base font-extrabold text-slate-800 dark:text-white">{formatValue(target)}</span>
+                                                   </div>
+                                               </div>
+
+                                               <div className="w-full bg-emerald-200/60 dark:bg-emerald-900/60 rounded-full h-2 overflow-hidden">
+                                                   <div className="bg-emerald-500 h-2 rounded-full transition-all duration-500" style={{ width: `${pct}%` }}></div>
+                                               </div>
+
+                                               <div className="flex items-center justify-between pt-2">
+                                                   <button 
+                                                       onClick={() => handleLinkInvestmentToCard(activeExpandedData.col.id, activeExpandedData.card.id, '')}
+                                                       className="text-xs text-slate-400 hover:text-rose-500 underline cursor-pointer"
+                                                   >
+                                                       Desvincular Caixinha
+                                                   </button>
+                                                   {onNavigate && (
+                                                       <button 
+                                                           onClick={() => onNavigate(View.INVESTMENTS)}
+                                                           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                                       >
+                                                           <PiggyBank className="w-4 h-4" />
+                                                           Ir a Caixinha em Investimentos
+                                                       </button>
+                                                   )}
+                                               </div>
+                                           </div>
+                                       );
+                                   }
+
+                                   return (
+                                       <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700/70 space-y-3">
+                                           <p className="text-xs text-slate-600 dark:text-slate-300">
+                                               Crie uma caixinha para guardar dinheiro especificamente para este objetivo. Ela aparecerá na área de <strong>Investimentos</strong>.
+                                           </p>
+                                           <div className="flex flex-col sm:flex-row gap-2">
+                                               <button 
+                                                   onClick={() => handleCreateCaixinhaForCard(activeExpandedData.col.id, activeExpandedData.card)}
+                                                   className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                                               >
+                                                   <PiggyBank className="w-4 h-4" />
+                                                   Criar Nova Caixinha (Meta: {formatValue(activeExpandedData.card.amount || 0)})
+                                               </button>
+                                               {investments && investments.length > 0 && (
+                                                   <select 
+                                                       onChange={(e) => {
+                                                           if (e.target.value) {
+                                                               handleLinkInvestmentToCard(activeExpandedData.col.id, activeExpandedData.card.id, e.target.value);
+                                                           }
+                                                       }}
+                                                       defaultValue=""
+                                                       className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                                                   >
+                                                       <option value="" disabled>Ou vincular caixinha existente...</option>
+                                                       {investments.map(inv => (
+                                                           <option key={inv.id} value={inv.id}>
+                                                               {inv.name} (Atual: R$ {inv.amount})
+                                                           </option>
+                                                       ))}
+                                                   </select>
+                                               )}
+                                           </div>
+                                       </div>
+                                   );
+                               })()}
+                           </div>
+                       </div>
+
+                       {/* Description */}
                       <div className="flex items-start gap-4">
                           <AlignLeft className="w-6 h-6 text-slate-400 mt-1" />
                           <div className="flex-1">

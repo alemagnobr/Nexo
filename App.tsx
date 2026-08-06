@@ -111,7 +111,13 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+    // Safety fallback: ensure authLoading doesn't stay true indefinitely if Firebase hangs or is blocked
+    const timer = setTimeout(() => {
+      setAuthLoading(false);
+    }, 2500);
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      clearTimeout(timer);
       setUser(currentUser);
       setAuthLoading(false);
 
@@ -130,7 +136,10 @@ const App: React.FC = () => {
         }
       }
     });
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -453,8 +462,8 @@ const App: React.FC = () => {
     );
   }
 
-  if (!user) {
-    return <Login />;
+  if (!user && !isGuest) {
+    return <Login onGuestLogin={handleGuestLogin} />;
   }
 
   return (

@@ -1,16 +1,18 @@
-
-const CACHE_NAME = 'nexo-fin-v3';
+const CACHE_NAME = 'nexo-fin-v4';
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json'
+  './',
+  './index.html',
+  './manifest.json'
 ];
 
 // Install Event
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
+      return Promise.allSettled(
+        ASSETS_TO_CACHE.map((url) => cache.add(url).catch(() => {}))
+      );
     })
   );
 });
@@ -26,38 +28,46 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
 // Fetch Event (Network first, then Cache fallback)
 self.addEventListener('fetch', (event) => {
+  // Only handle GET requests
+  if (event.request.method !== 'GET') return;
+
+  // Don't intercept browser extensions or chrome-extension schemes
+  if (!event.request.url.startsWith('http')) return;
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Check if we received a valid response
-        if (!response || response.status !== 200 || response.type !== 'basic') {
+        if (!response || response.status !== 200) {
           return response;
         }
 
-        // Clone the response
-        const responseToCache = response.clone();
-
-        caches.open(CACHE_NAME).then((cache) => {
-          // Only cache same-origin requests to avoid caching API calls incorrectly
-          if (event.request.url.startsWith(self.location.origin)) {
-            // Avoid caching POST requests or non-GET methods
-            if (event.request.method === 'GET') {
-               cache.put(event.request, responseToCache);
-            }
-          }
-        });
+        // Cache same-origin valid responses dynamically
+        if (event.request.url.startsWith(self.location.origin)) {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache).catch(() => {});
+          });
+        }
 
         return response;
       })
-      .catch(() => {
-        // If network fails, try cache
-        return caches.match(event.request);
+      .catch(async () => {
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        // If navigate request fails, return cached index.html
+        if (event.request.mode === 'navigate') {
+          const indexPage = await caches.match('./index.html') || await caches.match('./');
+          if (indexPage) return indexPage;
+        }
+        return new Response('Rede indisponível', { status: 503, statusText: 'Service Unavailable' });
       })
   );
 });

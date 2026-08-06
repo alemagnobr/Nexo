@@ -3,9 +3,11 @@ import { auth } from '../services/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { Hexagon, Loader2, AlertCircle, Copy, UserX, Linkedin, CheckCircle2, BarChart3, Heart } from 'lucide-react';
 
-interface LoginProps {}
+interface LoginProps {
+  onGuestLogin?: () => void;
+}
 
-export const Login: React.FC<LoginProps> = () => {
+export const Login: React.FC<LoginProps> = ({ onGuestLogin }) => {
   const [error, setError] = useState('');
   const [authErrorDomain, setAuthErrorDomain] = useState('');
   const [loading, setLoading] = useState(false);
@@ -98,7 +100,7 @@ export const Login: React.FC<LoginProps> = () => {
             )}
 
             {/* Google Sign-In button (Large, prominent) */}
-            <div className="space-y-4">
+            <div className="space-y-3">
                 <button 
                     type="button"
                     onClick={handleGoogleLogin}
@@ -119,6 +121,17 @@ export const Login: React.FC<LoginProps> = () => {
                         </>
                     )}
                 </button>
+
+                {onGuestLogin && (
+                    <button 
+                        type="button"
+                        onClick={onGuestLogin}
+                        className="w-full flex items-center justify-center gap-2 py-3 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-all font-semibold text-slate-600 dark:text-slate-400 text-sm active:scale-[0.99] cursor-pointer"
+                    >
+                        <UserX className="w-4 h-4 text-slate-500" />
+                        <span>Usar sem login (Modo Convidado)</span>
+                    </button>
+                )}
             </div>
             
             {/* SUPPORT / PIX SECTION - EVIDENT STYLE */}

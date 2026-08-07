@@ -77,10 +77,21 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
   const [completionWalletId, setCompletionWalletId] = useState<string>('');
   const [currentDate, setCurrentDate] = useState(new Date());
 
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
   const lateBillsCount = useMemo(() => {
-    const today = new Date(new Date().setHours(0,0,0,0));
-    return transactions.filter(t => t.type === 'expense' && t.status === 'pending' && new Date(t.date) < today).length;
-  }, [transactions]);
+    return transactions.filter(t => t.status === 'pending' && t.date < todayStr).length;
+  }, [transactions, todayStr]);
+
+  const todayBillsCount = useMemo(() => {
+    return transactions.filter(t => t.status === 'pending' && t.date === todayStr).length;
+  }, [transactions, todayStr]);
   
   // --- FILTERS STATE ---
   const [viewFilter, setViewFilter] = useState<'all' | 'income' | 'expense' | 'late' | 'fixed'>('all');
@@ -119,8 +130,6 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
   // --- BUSINESS DAY STATE (Salário) ---
   const [useBusinessDay, setUseBusinessDay] = useState(false);
   const [businessDayOrdinal, setBusinessDayOrdinal] = useState('5');
-
-  const todayStr = new Date().toISOString().split('T')[0];
 
   // Ref for auto-scrolling to form
   const formRef = useRef<HTMLDivElement>(null);
@@ -364,7 +373,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
           
           // Somar apenas PENDENTES para projeção (incluindo Ghosts)
           const walletType = wallets.find(w => w.id === t.walletId)?.type;
-          const isExcluded = walletType === WalletType.MEAL_TICKET || walletType === WalletType.CREDIT_CARD;
+          const isExcluded = walletType === WalletType.MEAL_TICKET;
           if (t.status === 'pending' && !isExcluded) {
               const val = t.type === 'income' ? t.amount : -t.amount;
               groups[t.date].total += val;
@@ -392,7 +401,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
 
       // 3. Calculate Running Balance (Accumulated)
       const chronological = [...sortedGroups].reverse(); // Oldest first
-      let runningTotal = wallets.filter(w => w.type !== WalletType.MEAL_TICKET && w.type !== WalletType.CREDIT_CARD).reduce((acc, w) => acc + w.balance, 0);
+      let runningTotal = wallets.filter(w => w.type !== WalletType.MEAL_TICKET).reduce((acc, w) => acc + w.balance, 0);
       
       const chronologicalWithBalance = chronological.map(group => {
           runningTotal += group.total;
@@ -1018,6 +1027,28 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
                       className="px-3 py-1.5 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-lg hover:bg-rose-200 dark:hover:bg-rose-900/60 transition-colors"
                   >
                       Ver Atrasadas
+                  </button>
+              </div>
+          )}
+          {todayBillsCount > 0 && (
+              <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 p-3 rounded-xl border border-amber-200 dark:border-amber-800/30 animate-fade-in">
+                  <div className="flex items-center gap-2">
+                      <Bell className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <div>
+                          <span className="text-sm text-amber-800 dark:text-amber-300 font-bold block">Atenção: Contas para Hoje</span>
+                          <span className="text-xs text-amber-700 dark:text-amber-400/80">
+                              Você possui {todayBillsCount} {todayBillsCount === 1 ? 'conta' : 'contas'} a pagar ou receber hoje.
+                          </span>
+                      </div>
+                  </div>
+                  <button 
+                      onClick={() => {
+                          setViewFilter('all');
+                          setSearchQuery('');
+                      }}
+                      className="px-3 py-1.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-bold rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors shrink-0"
+                  >
+                      Ver Contas de Hoje
                   </button>
               </div>
           )}
@@ -1765,6 +1796,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
                                                                   <AlertCircle className="w-3 h-3" /> Atrasada
                                                               </span>
                                                           )}
+                                                          {t.status === 'pending' && t.date === todayStr && (
+                                                              <span className="flex items-center gap-0.5 text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded font-bold" title="Vence Hoje">
+                                                                  <Bell className="w-3 h-3" /> Vence Hoje
+                                                              </span>
+                                                          )}
                                                           {t.time && (
                                                               <span className="flex items-center gap-0.5 text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded font-bold" title="Horário">
                                                                   <Clock className="w-3 h-3" /> {t.time}
@@ -1868,6 +1904,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
                                                           {t.status === 'pending' && t.date < todayStr && (
                                                               <span className="text-[10px] text-rose-600 bg-rose-50 dark:bg-rose-900/30 px-1.5 py-0.5 rounded flex items-center gap-0.5" title="Atrasada">
                                                                   <AlertCircle className="w-3 h-3" /> Atrasada
+                                                              </span>
+                                                          )}
+                                                          {t.status === 'pending' && t.date === todayStr && (
+                                                              <span className="text-[10px] text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded flex items-center gap-0.5 font-bold" title="Vence Hoje">
+                                                                  <Bell className="w-3 h-3" /> Vence Hoje
                                                               </span>
                                                           )}
                                                           {t.time && (

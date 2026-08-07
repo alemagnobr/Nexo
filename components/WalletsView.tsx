@@ -51,6 +51,81 @@ const WALLET_TYPES: { value: WalletType; label: string; icon: any }[] = [
 
 const COLORS = ['slate', 'red', 'orange', 'amber', 'emerald', 'teal', 'cyan', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
 
+export const getCardGradient = (color: string = 'blue') => {
+  const chosenColor = color === 'black' || !color ? 'blue' : color;
+  switch (chosenColor) {
+    case 'blue':
+      return {
+        cardBg: 'bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 text-white border-blue-400/30 shadow-blue-900/20',
+        badgeBg: 'bg-blue-400/20 text-blue-100 border-blue-300/30',
+        glowBg: 'bg-blue-400/20',
+        iconBg: 'bg-blue-500/30 text-blue-100',
+      };
+    case 'emerald':
+      return {
+        cardBg: 'bg-gradient-to-br from-emerald-600 via-teal-700 to-emerald-950 text-white border-emerald-400/30 shadow-emerald-900/20',
+        badgeBg: 'bg-emerald-400/20 text-emerald-100 border-emerald-300/30',
+        glowBg: 'bg-emerald-400/20',
+        iconBg: 'bg-emerald-500/30 text-emerald-100',
+      };
+    case 'purple':
+    case 'violet':
+      return {
+        cardBg: 'bg-gradient-to-br from-purple-600 via-violet-700 to-indigo-950 text-white border-purple-400/30 shadow-purple-900/20',
+        badgeBg: 'bg-purple-400/20 text-purple-100 border-purple-300/30',
+        glowBg: 'bg-purple-400/20',
+        iconBg: 'bg-purple-500/30 text-purple-100',
+      };
+    case 'rose':
+    case 'red':
+      return {
+        cardBg: 'bg-gradient-to-br from-rose-600 via-red-700 to-rose-950 text-white border-rose-400/30 shadow-rose-900/20',
+        badgeBg: 'bg-rose-400/20 text-rose-100 border-rose-300/30',
+        glowBg: 'bg-rose-400/20',
+        iconBg: 'bg-rose-500/30 text-rose-100',
+      };
+    case 'amber':
+    case 'orange':
+      return {
+        cardBg: 'bg-gradient-to-br from-amber-500 via-orange-600 to-amber-900 text-white border-amber-400/30 shadow-amber-900/20',
+        badgeBg: 'bg-amber-400/20 text-amber-100 border-amber-300/30',
+        glowBg: 'bg-amber-400/20',
+        iconBg: 'bg-amber-500/30 text-amber-100',
+      };
+    case 'teal':
+    case 'cyan':
+      return {
+        cardBg: 'bg-gradient-to-br from-teal-600 via-cyan-700 to-teal-950 text-white border-teal-400/30 shadow-teal-900/20',
+        badgeBg: 'bg-teal-400/20 text-teal-100 border-teal-300/30',
+        glowBg: 'bg-teal-400/20',
+        iconBg: 'bg-teal-500/30 text-teal-100',
+      };
+    case 'fuchsia':
+    case 'pink':
+      return {
+        cardBg: 'bg-gradient-to-br from-fuchsia-600 via-pink-700 to-purple-950 text-white border-fuchsia-400/30 shadow-fuchsia-900/20',
+        badgeBg: 'bg-fuchsia-400/20 text-fuchsia-100 border-fuchsia-300/30',
+        glowBg: 'bg-fuchsia-400/20',
+        iconBg: 'bg-fuchsia-500/30 text-fuchsia-100',
+      };
+    case 'slate':
+      return {
+        cardBg: 'bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900 text-white border-slate-600 shadow-slate-900/20',
+        badgeBg: 'bg-slate-600/40 text-slate-200 border-slate-500/30',
+        glowBg: 'bg-slate-400/10',
+        iconBg: 'bg-slate-600/40 text-slate-200',
+      };
+    case 'indigo':
+    default:
+      return {
+        cardBg: 'bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-950 text-white border-indigo-400/30 shadow-indigo-900/20',
+        badgeBg: 'bg-indigo-400/20 text-indigo-100 border-indigo-300/30',
+        glowBg: 'bg-indigo-400/20',
+        iconBg: 'bg-indigo-500/30 text-indigo-100',
+      };
+  }
+};
+
 export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions = [], categories = [], onAdd, onUpdate, onDelete, onTransfer, onUpdateTransaction, onAddTransaction }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
@@ -653,38 +728,28 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
                         </select>
                       </div>
 
-                      {formData.type !== WalletType.CREDIT_CARD ? (
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Saldo Atual</label>
-                          <CurrencyInput
-                            required
-                            value={formData.balance}
-                            onChangeValue={val => setFormData({ ...formData, balance: parseFloat(val) || 0 })}
-                            className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
-                          />
-                        </div>
-                      ) : (
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Saldo em Conta</label>
-                          <div className="w-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-xl p-3 text-sm font-semibold">
-                            R$ 0,00 (Operado via Limite)
-                          </div>
-                        </div>
-                      )}
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Saldo Atual</label>
+                        <CurrencyInput
+                          required
+                          value={formData.balance}
+                          onChangeValue={val => setFormData({ ...formData, balance: parseFloat(val) || 0 })}
+                          className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+                        />
+                      </div>
 
                       {formData.type === WalletType.CREDIT_CARD && (
                         <>
                           <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Limite Total do Cartão</label>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Limite Total do Cartão (Opcional)</label>
                             <CurrencyInput
-                              required
                               value={formData.creditLimit || 0}
-                              onChangeValue={val => setFormData({ ...formData, creditLimit: parseFloat(val) || 0, balance: 0 })}
+                              onChangeValue={val => setFormData({ ...formData, creditLimit: parseFloat(val) || 0 })}
                               className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Dia do Vencimento</label>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Dia do Vencimento (Opcional)</label>
                             <input
                               type="number"
                               min="1"
@@ -812,256 +877,179 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
          <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase flex items-center gap-2 mb-3">
             <Landmark className="w-4 h-4 text-slate-500" /> Contas e Cartões
          </h3>
-         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {creditCardsSummaries.map(card => (
-               <div key={card.id} className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 p-3 rounded-xl shadow-md relative overflow-hidden group hover:shadow-lg transition-all flex flex-col justify-between">
-                  <div className={`absolute -right-10 -top-10 w-32 h-32 bg-${card.color || 'indigo'}-500/20 rounded-full blur-3xl`} />
-                  
-                  <div className="flex justify-between items-start mb-3">
-                     <div className="flex items-center gap-1.5 relative z-10">
-                        <div className={`p-1.5 rounded-lg bg-slate-700 text-${card.color || 'indigo'}-400`}>
-                          <CreditCard className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="flex flex-col">
-                           <span className="text-[8px] text-slate-400 uppercase font-bold">Cartão de Crédito</span>
-                           <h3 className="font-bold text-white text-xs truncate" title={card.name}>{card.name}</h3>
-                        </div>
-                     </div>
-                     <div className="flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleEdit(card as Wallet)} className="p-1 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-colors" title="Editar">
-                           <Pencil className="w-3 h-3" />
-                        </button>
-                        <button onClick={() => handleDelete(card.id)} className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 rounded transition-colors" title="Excluir">
-                           <Trash2 className="w-3 h-3" />
-                        </button>
-                     </div>
-                  </div>
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {wallets.map(wallet => {
+              const isCreditCard = wallet.type === WalletType.CREDIT_CARD;
+              const isMealTicket = wallet.type === WalletType.MEAL_TICKET;
+              const isBank = wallet.type === WalletType.BANK;
 
-                  <div className="relative z-10">
-                     <div className="flex justify-between items-end mb-2">
-                         <div>
-                            <p className="text-[9px] text-slate-400 font-medium uppercase tracking-widest mb-0.5">Fatura Atual</p>
-                            <p className="text-sm font-black text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(card.currentInvoice)}</p>
-                         </div>
-                         {card.creditCardDueDate && (
-                            <span className="text-[8px] font-bold bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded border border-slate-600 mb-0.5">
-                                Venc. {card.nextDueDate ? formatDateDMY(card.nextDueDate) : formatDateDMY(getDefaultNextDueDate(card.creditCardDueDate))}
-                            </span>
-                         )}
-                     </div>
+              const creditSummary = isCreditCard 
+                ? creditCardsSummaries.find(c => c.id === wallet.id) 
+                : null;
+                
+              const currentInvoice = creditSummary?.currentInvoice || 0;
+              const nextDue = wallet.nextDueDate || getDefaultNextDueDate(wallet.creditCardDueDate);
 
-                     {card.creditLimit ? (
-                          <div className="pt-2 border-t border-slate-700/50 mt-1">
-                             <div className="flex justify-between text-[9px] font-medium text-slate-400 mb-1.5">
-                                <span>Lim: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(card.creditLimit)}</span>
-                                <span className="text-white">Disp: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.max(0, card.creditLimit - card.currentInvoice))}</span>
-                             </div>
-                             <div className="w-full h-1 bg-slate-700 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all bg-${card.color || 'indigo'}-500`} style={{ width: `${Math.min(100, (card.currentInvoice / card.creditLimit) * 100)}%` }} />
-                             </div>
-                          </div>
-                      ) : (
-                          <div className="text-[9px] text-slate-500 italic mt-2">Sem limite.</div>
-                      )}
-                      {card.observation && (
-                         <p className="text-[9px] text-slate-500 mt-2 line-clamp-1 italic">
-                            {card.observation}
-                         </p>
-                      )}
-                      {onAddTransaction && (
-                         <div className="mt-3 flex flex-col gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleStartLaunchInvoice(card as Wallet & { currentInvoice: number })}
-                              className="w-full py-1.5 px-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-purple-600/10 hover:shadow-purple-600/25 active:scale-[0.98]"
-                              title="Lançar transação de despesa da fatura fechada na data de vencimento"
-                            >
-                              <Calendar className="w-3.5 h-3.5" />
-                              Lançar Despesa da Fatura
-                            </button>
+              // Get card gradient based on user's selected color (defaults to indigo for credit cards, blue for bank accounts)
+              const cardColor = wallet.color || (isCreditCard ? 'indigo' : isMealTicket ? 'amber' : 'blue');
+              const gradient = getCardGradient(cardColor);
 
-                            <div className="grid grid-cols-3 gap-1">
-                               <button
-                                 type="button"
-                                 onClick={() => handleStartPayInvoice(card as Wallet & { currentInvoice: number })}
-                                 className="py-1 px-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-[0.98]"
-                                 title="Baixar ou pagar fatura imediatamente"
-                               >
-                                 <CheckCircle className="w-3 h-3" />
-                                 Pagar
-                               </button>
-                               <button
-                                 type="button"
-                                 onClick={() => handleStartUseBalance(card as Wallet)}
-                                 className="py-1 px-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-[0.98]"
-                                 title="Debitar despesa de compra neste cartão"
-                               >
-                                 <ArrowDownCircle className="w-3 h-3" />
-                                 Usar saldo
-                               </button>
-                               <button
-                                 type="button"
-                                 onClick={() => setManagingInstallmentsCard(card as Wallet)}
-                                 className="py-1 px-1 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-[0.98]"
-                                 title="Ver e gerenciar parcelamentos deste cartão"
-                               >
-                                 <Layers className="w-3 h-3 text-purple-400" />
-                                 Parcelas
-                               </button>
-                            </div>
-                         </div>
-                      )}
-                  </div>
-               </div>
-            ))}
-
-            {mealTickets.map(card => (
-               <div key={card.id} className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 p-3 rounded-xl shadow-md relative overflow-hidden group hover:shadow-lg transition-all flex flex-col justify-between">
-                  <div className="absolute -right-10 -top-10 w-32 h-32 bg-${card.color || 'red'}-500/10 rounded-full blur-3xl" />
-                  
-                  <div className="flex justify-between items-start mb-3">
-                     <div className="flex items-center gap-1.5 relative z-10">
-                        <div className={`p-1.5 rounded-lg bg-slate-700 text-${card.color || 'red'}-400`}>
-                          <Utensils className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="flex flex-col">
-                           <span className={`text-[8px] text-${card.color || 'red'}-400 uppercase font-bold tracking-wider`}>Vale Alimentação</span>
-                           <h3 className="font-bold text-white text-xs truncate" title={card.name}>{card.name}</h3>
-                        </div>
-                     </div>
-                     <div className="flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleEdit(card as Wallet)} className="p-1 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-colors" title="Editar">
-                           <Pencil className="w-3 h-3" />
-                        </button>
-                        <button onClick={() => handleDelete(card.id)} className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-500/20 rounded transition-colors" title="Excluir">
-                           <Trash2 className="w-3 h-3" />
-                        </button>
-                     </div>
-                  </div>
-
-                  <div className="relative z-10">
-                     <div className="flex justify-between items-end mb-2">
-                         <div>
-                            <p className={`text-[9px] text-${card.color || 'red'}-400 font-medium uppercase tracking-widest mb-0.5`}>Saldo Disponível</p>
-                            <p className="text-sm font-black text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(card.balance)}</p>
-                         </div>
-                     </div>
-
-                     <div className="pt-2 border-t border-slate-700/50 mt-1 flex items-center justify-between">
-                        <span className={`text-[8px] uppercase font-bold tracking-widest text-${card.color || 'red'}-400`}>BENEFÍCIO</span>
-                        <div className="w-6 h-4 bg-amber-500/20 border border-amber-500/30 rounded-md flex items-center justify-center">
-                          <div className="w-3 h-2 bg-amber-500/30 rounded-sm" />
-                        </div>
-                     </div>
-
-                     {card.observation && (
-                        <p className="text-[9px] text-slate-400 mt-2 line-clamp-1 italic leading-tight">
-                           {card.observation}
-                        </p>
-                     )}
-
-                     {onAddTransaction && (
-                        <div className="mt-3 flex gap-1.5">
-                           <button
-                             type="button"
-                             onClick={() => handleStartUseBalance(card as Wallet)}
-                             className="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer shadow-md shadow-emerald-600/10 hover:shadow-emerald-600/25 active:scale-[0.98]"
-                             title="Lançar despesa e debitar do vale"
-                           >
-                             <ArrowDownCircle className="w-3 h-3" />
-                             Usar saldo
-                           </button>
-                           <button
-                             type="button"
-                             onClick={() => handleStartAddBenefit(card as Wallet)}
-                             className="flex-1 py-1.5 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/25 active:scale-[0.98]"
-                             title="Registrar recarga / entrada de benefício"
-                           >
-                             <PlusCircle className="w-3 h-3" />
-                             Inserir benefício
-                           </button>
-                        </div>
-                     )}
-                  </div>
-               </div>
-            ))}
-
-            {otherWallets.map(wallet => {
-              const TypeIcon = WALLET_TYPES.find(t => t.value === wallet.type)?.icon || MoreHorizontal;
-              const typeLabel = WALLET_TYPES.find(t => t.value === wallet.type)?.label || 'Conta';
-              const colorClass = wallet.color ? `bg-${wallet.color}-100 text-${wallet.color}-600 dark:bg-${wallet.color}-900/30 dark:text-${wallet.color}-400` : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
-              const borderClass = wallet.color ? `border-${wallet.color}-200 dark:border-${wallet.color}-800/50` : 'border-slate-200 dark:border-slate-700';
+              const TypeIcon = WALLET_TYPES.find(t => t.value === wallet.type)?.icon || Landmark;
+              const typeLabel = isBank ? 'Conta Bancária' : isCreditCard ? 'Cartão de Crédito' : isMealTicket ? 'Vale Refeição' : 'Outra Conta';
 
               return (
-                <div key={wallet.id} className={`bg-white dark:bg-slate-800 rounded-xl p-3 border shadow-sm hover:shadow-md transition-all group ${borderClass} flex flex-col justify-between`}>
-                  <div className="flex justify-between items-start mb-2">
+                <div 
+                  key={wallet.id} 
+                  className={`${gradient.cardBg} p-4 rounded-2xl shadow-lg relative overflow-hidden group transition-all duration-300 hover:scale-[1.02] flex flex-col justify-between min-h-[190px] border`}
+                >
+                  {/* Glowing background blur */}
+                  <div className={`absolute -right-12 -top-12 w-36 h-36 ${gradient.glowBg} rounded-full blur-2xl pointer-events-none`} />
+
+                  {/* Top Header */}
+                  <div className="flex justify-between items-start mb-2 relative z-10">
                     <div className="flex items-center gap-2">
-                       <div className={`p-1.5 rounded-lg ${colorClass}`}>
-                         <TypeIcon className="w-3.5 h-3.5" />
-                       </div>
-                       <div className="flex flex-col">
-                           <span className="text-[8px] text-slate-400 uppercase font-bold">{typeLabel}</span>
-                           <h3 className="font-bold text-slate-800 dark:text-white text-xs truncate" title={wallet.name}>{wallet.name}</h3>
-                       </div>
+                      <div className={`p-2 rounded-xl backdrop-blur-md shadow-inner text-white ${gradient.iconBg}`}>
+                        <TypeIcon className="w-4 h-4" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className={`text-[9px] uppercase font-extrabold tracking-wider px-1.5 py-0.5 rounded border w-fit ${gradient.badgeBg}`}>
+                          {typeLabel}
+                        </span>
+                        <h3 className="font-bold text-white text-sm truncate max-w-[140px] mt-0.5" title={wallet.name}>
+                          {wallet.name}
+                        </h3>
+                      </div>
                     </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+
+                    {/* Quick Action Icons */}
+                    <div className="flex gap-1 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                       {onTransfer && (
-                        <button onClick={() => {
-                          setTransferSourceId(wallet.id);
-                          setTransferTargetId('');
-                          setTransferAmount(0);
-                          setTransferDate(new Date().toISOString().split('T')[0]);
-                          setTransferObs('');
-                          setTransferError('');
-                          setIsTransferModalOpen(true);
-                        }} className="p-1 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors" title="Transferir">
-                          <ArrowRightLeft className="w-3 h-3" />
+                        <button 
+                          onClick={() => {
+                            setTransferSourceId(wallet.id);
+                            setTransferTargetId('');
+                            setTransferAmount(0);
+                            setTransferDate(new Date().toISOString().split('T')[0]);
+                            setTransferObs('');
+                            setTransferError('');
+                            setIsTransferModalOpen(true);
+                          }} 
+                          className="p-1.5 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors" 
+                          title="Transferir"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5" />
                         </button>
                       )}
-                      <button onClick={() => handleEdit(wallet)} className="p-1 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors" title="Editar">
-                        <Pencil className="w-3 h-3" />
+                      <button 
+                        onClick={() => handleEdit(wallet)} 
+                        className="p-1.5 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors" 
+                        title="Editar"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => handleDelete(wallet.id)} className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded transition-colors" title="Excluir">
-                        <Trash2 className="w-3 h-3" />
+                      <button 
+                        onClick={() => handleDelete(wallet.id)} 
+                        className="p-1.5 text-white/80 hover:text-rose-200 hover:bg-rose-500/30 rounded-lg transition-colors" 
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
-                  
-                  <div>
-                    <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-700/50">
-                      <p className="text-[9px] text-slate-400 dark:text-slate-500 font-medium uppercase tracking-widest mb-0.5">Saldo Atual</p>
-                      <p className={`text-sm font-bold ${wallet.balance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(wallet.balance)}
+
+                  {/* Body: Balance & Invoice Details */}
+                  <div className="relative z-10 my-auto py-1">
+                    <div>
+                      <p className="text-[10px] text-white/75 uppercase font-semibold tracking-wider">
+                        {isCreditCard ? 'Saldo do Cartão' : 'Saldo Disponível'}
+                      </p>
+                      <p className="text-xl font-black text-white tracking-tight">
+                        {formatCurrency(wallet.balance)}
                       </p>
                     </div>
+
+                    {isCreditCard && (
+                      <div className="mt-2 pt-2 border-t border-white/15">
+                        <div className="flex justify-between items-center text-[10px] text-white/85 font-semibold">
+                          <span>Fatura Atual: {formatCurrency(currentInvoice)}</span>
+                          {wallet.creditCardDueDate && (
+                            <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded font-bold">
+                              Venc. {formatDateDMY(nextDue)}
+                            </span>
+                          )}
+                        </div>
+                        {wallet.creditLimit ? (
+                          <div className="mt-1">
+                            <div className="flex justify-between text-[9px] text-white/70">
+                              <span>Lim: {formatCurrency(wallet.creditLimit)}</span>
+                              <span>Disp: {formatCurrency(Math.max(0, wallet.creditLimit - currentInvoice))}</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden mt-1">
+                              <div 
+                                className="h-full bg-white rounded-full transition-all" 
+                                style={{ width: `${Math.min(100, (currentInvoice / wallet.creditLimit) * 100)}%` }} 
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+
                     {wallet.observation && (
-                      <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-1.5 line-clamp-1 italic leading-tight">
+                      <p className="text-[10px] text-white/70 mt-1 line-clamp-1 italic">
                         {wallet.observation}
                       </p>
                     )}
-                    {onAddTransaction && (
-                      <div className="mt-3 flex gap-1.5">
+                  </div>
+
+                  {/* Footer Actions */}
+                  {onAddTransaction && (
+                    <div className="mt-2 pt-2 border-t border-white/15 flex flex-col gap-1.5 relative z-10">
+                      <div className="grid grid-cols-2 gap-1.5">
                         <button
                           type="button"
                           onClick={() => handleStartUseBalance(wallet)}
-                          className="flex-1 py-1.5 px-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/70 text-indigo-700 dark:text-indigo-300 font-bold text-[11px] rounded-lg transition-all flex items-center justify-center gap-1 border border-indigo-200/80 dark:border-indigo-800/80 cursor-pointer active:scale-[0.98]"
-                          title="Lançar despesa e debitar desta conta"
+                          className="py-1.5 px-2 bg-white/20 hover:bg-white/30 text-white font-bold text-[11px] rounded-xl transition-all flex items-center justify-center gap-1 active:scale-95 shadow-sm"
+                          title="Lançar despesa e debitar desta conta/cartão"
                         >
-                          <ArrowDownCircle className="w-3 h-3 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                          <ArrowDownCircle className="w-3.5 h-3.5 text-white shrink-0" />
                           Usar saldo
                         </button>
                         <button
                           type="button"
                           onClick={() => handleStartAddBenefit(wallet)}
-                          className="flex-1 py-1.5 px-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/70 text-emerald-700 dark:text-emerald-300 font-bold text-[11px] rounded-lg transition-all flex items-center justify-center gap-1 border border-emerald-200/80 dark:border-emerald-800/80 cursor-pointer active:scale-[0.98]"
-                          title="Registrar entrada de benefício ou depósito"
+                          className="py-1.5 px-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[11px] rounded-xl transition-all flex items-center justify-center gap-1 active:scale-95 shadow-sm"
+                          title="Registrar recarga / entrada de dinheiro nesta conta/cartão"
                         >
-                          <PlusCircle className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          Inserir benefício
+                          <PlusCircle className="w-3.5 h-3.5 text-white shrink-0" />
+                          {isMealTicket ? 'Benefício' : 'Recarga'}
                         </button>
                       </div>
-                    )}
-                  </div>
+
+                      {isCreditCard && creditSummary && (
+                        <div className="grid grid-cols-2 gap-1.5 mt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleStartPayInvoice(creditSummary)}
+                            className="py-1 px-1.5 bg-indigo-500/80 hover:bg-indigo-600 text-white font-bold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1"
+                            title="Pagar fatura"
+                          >
+                            <CheckCircle className="w-3 h-3 shrink-0" />
+                            Pagar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setManagingInstallmentsCard(wallet)}
+                            className="py-1 px-1.5 bg-white/10 hover:bg-white/20 text-white font-bold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1"
+                            title="Ver parcelas"
+                          >
+                            <Layers className="w-3 h-3 text-purple-200 shrink-0" />
+                            Parcelas
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -187,11 +187,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
   }, [data, onUnlockBadge]);
 
-  // Late bills (Contas atrasadas) calculation
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  // Late bills (Contas atrasadas - estritamente antes de hoje)
   const lateBills = useMemo(() => {
-    const today = new Date(new Date().setHours(0,0,0,0));
-    return (data.transactions || []).filter(t => t.type === 'expense' && t.status === 'pending' && new Date(t.date) < today);
-  }, [data.transactions]);
+    return (data.transactions || []).filter(t => t.status === 'pending' && t.date < todayStr);
+  }, [data.transactions, todayStr]);
+
+  // Today bills (Contas a vencer/receber hoje)
+  const todayBills = useMemo(() => {
+    return (data.transactions || []).filter(t => t.status === 'pending' && t.date === todayStr);
+  }, [data.transactions, todayStr]);
 
   // --- NUDGES LOGIC ---
   const nudges = useMemo(() => {
@@ -271,18 +283,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
       })
       .reduce((acc, t) => acc + t.amount, 0);
   
-  // FIX: Lógica de saldo aprimorada
-  // 1. Calcula o saldo real baseado puramente nas transações carregadas agora (Pago/Recebido)
+  // Saldo real e unificado
   const realTimeBalance = dashboardTxs
-      .filter(t => t.status === 'paid' && (!t.walletId || !creditWalletIds.has(t.walletId)))
+      .filter(t => t.status === 'paid')
       .reduce((acc, t) => acc + (t.type === 'income' ? t.amount : -t.amount), 0);
 
-  // 2. Decide qual saldo exibir:
-  // - Se NÃO tem transações, o saldo É ZERO (ignora cache que pode estar sujo).
-  // - Se tem poucas transações (<300), usa o realTimeBalance para garantir precisão.
-  // - Se tem muitas, usa o walletBalance descontando os meal tickets e cartões.
   const bankWalletsSum = (data.wallets || [])
-      .filter(w => w.type !== WalletType.MEAL_TICKET && w.type !== WalletType.CREDIT_CARD)
+      .filter(w => w.type !== WalletType.MEAL_TICKET)
       .reduce((acc, w) => acc + w.balance, 0);
 
   const currentBalance = (data.transactions.length === 0) 
@@ -395,9 +402,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, [data.transactions]);
 
   const lateBillsCount = useMemo(() => {
-    const today = new Date(new Date().setHours(0,0,0,0));
-    return data.transactions.filter(t => t.type === 'expense' && t.status === 'pending' && new Date(t.date) < today).length;
-  }, [data.transactions]);
+    return data.transactions.filter(t => t.status === 'pending' && t.date < todayStr).length;
+  }, [data.transactions, todayStr]);
 
   // 2. Top Investments (Top 3 by Amount)
   const topInvestments = useMemo(() => {
@@ -507,6 +513,30 @@ export const Dashboard: React.FC<DashboardProps> = ({
             className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer shadow-md shadow-rose-600/20"
           >
             <span>Ver Contas</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* TODAY BILLS ALERT BANNER */}
+      {todayBills.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-xl shrink-0">
+              <Bell className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-amber-800 dark:text-amber-300 text-sm">Atenção: Contas para Hoje</h3>
+              <p className="text-amber-700 dark:text-amber-400/80 text-xs mt-0.5 font-medium">
+                Você possui {todayBills.length} {todayBills.length === 1 ? 'conta' : 'contas'} a pagar ou receber hoje.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate(View.TRANSACTIONS)}
+            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer shadow-md shadow-amber-600/20"
+          >
+            <span>Ver Contas de Hoje</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>

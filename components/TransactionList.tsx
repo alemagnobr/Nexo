@@ -559,13 +559,21 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
       finalStatus = 'pending';
     }
 
-    // Negative balance warning
+    // Negative balance check
     if (finalStatus === 'paid' && newTransaction.type === 'expense' && newTransaction.walletId) {
       const wallet = wallets.find(w => w.id === newTransaction.walletId);
-      if (wallet && baseAmount > wallet.balance) {
-         setPendingSubmitData({ ...newTransaction, status: finalStatus, amount: String(baseAmount) });
-         setShowNegativeBalanceWarning(true);
-         return;
+      if (wallet) {
+        let currentWalletBal = wallet.balance;
+        if (editingId) {
+          const oldTx = transactions.find(t => t.id === editingId);
+          if (oldTx && oldTx.status === 'paid' && oldTx.walletId === wallet.id && oldTx.type === 'expense') {
+            currentWalletBal += oldTx.amount;
+          }
+        }
+        if (baseAmount > currentWalletBal + 0.001) {
+          setTransactionError(`Lançamento não permitido: A conta ou cartão "${wallet.name}" não possui margem/saldo suficiente. Disponível: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentWalletBal)}`);
+          return;
+        }
       }
     }
 
@@ -883,7 +891,14 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
 
   const handleConfirmCompletion = () => {
     if (completingTransaction && completionWalletId) {
-        onToggleStatus(completingTransaction.id, completionWalletId);
+      if (completingTransaction.type === 'expense') {
+        const wallet = wallets?.find(w => w.id === completionWalletId);
+        if (wallet && completingTransaction.amount > wallet.balance + 0.001) {
+          alert(`Transação não permitida: A conta ou cartão "${wallet.name}" não possui margem/saldo suficiente.\n\nDisponível: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(wallet.balance)}\nValor da transação: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(completingTransaction.amount)}`);
+          return;
+        }
+      }
+      onToggleStatus(completingTransaction.id, completionWalletId);
     }
     setCompletingTransaction(null);
     setCompletionWalletId('');

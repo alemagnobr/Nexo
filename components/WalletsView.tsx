@@ -15,6 +15,19 @@ interface WalletsViewProps {
   onAddTransaction?: (t: Omit<Transaction, 'id'>) => void;
 }
 
+export const getCreditCardMetrics = (wallet: Wallet, transactions: Transaction[] = []) => {
+  const creditLimit = wallet.creditLimit || 0;
+  const availableBalance = wallet.balance || 0;
+  const totalUsed = Math.max(0, creditLimit - availableBalance);
+  return {
+    creditLimit,
+    initialUsed: totalUsed,
+    txsSpent: 0,
+    totalUsed,
+    availableBalance
+  };
+};
+
 export const getDefaultNextDueDate = (dueDay?: number): string => {
   const day = dueDay || 10;
   const today = new Date();
@@ -266,6 +279,11 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
       return;
     }
 
+    if (useExpenseAmount > usingBalanceWallet.balance + 0.001) {
+      setUseExpenseError(`Transação não permitida: A conta ou cartão "${usingBalanceWallet.name}" não possui margem/saldo suficiente. Disponível: ${formatCurrency(usingBalanceWallet.balance)}`);
+      return;
+    }
+
     try {
       const newTx: Omit<Transaction, 'id'> = {
         description: useExpenseDesc.trim(),
@@ -297,14 +315,17 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
     return wallets.reduce(
       (acc, wallet) => {
         if (wallet.type === WalletType.BANK) acc.bank += wallet.balance;
-        else if (wallet.type === WalletType.CREDIT_CARD) acc.credit += wallet.balance;
+        else if (wallet.type === WalletType.CREDIT_CARD) {
+          const metrics = getCreditCardMetrics(wallet, transactions);
+          acc.credit += metrics.availableBalance;
+        }
         else if (wallet.type === WalletType.MEAL_TICKET) acc.meal += wallet.balance;
         else if (wallet.type === WalletType.OTHER) acc.other += wallet.balance;
         return acc;
       },
       { bank: 0, credit: 0, meal: 0, other: 0 }
     );
-  }, [wallets]);
+  }, [wallets, transactions]);
 
   const creditCardsSummaries = useMemo(() => {
     const allCreditCards = wallets.filter(w => w.type === WalletType.CREDIT_CARD);
@@ -395,6 +416,12 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
     
     if (paymentAmount <= 0) {
       setPaymentError('O valor de pagamento deve ser maior que zero.');
+      return;
+    }
+
+    const payingWallet = wallets.find(w => w.id === paymentWalletId);
+    if (payingWallet && paymentAmount > payingWallet.balance + 0.001) {
+      setPaymentError(`Transação não permitida: A conta "${payingWallet.name}" não possui saldo suficiente. Disponível: ${formatCurrency(payingWallet.balance)}`);
       return;
     }
 
@@ -566,13 +593,26 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
   });
 
   const resetForm = () => {
-    setFormData({ name: '', type: WalletType.BANK, balance: 0, color: 'indigo', observation: '', creditCardDueDate: undefined, creditLimit: undefined });
+    setFormData({ 
+      name: '', 
+      type: WalletType.BANK, 
+      balance: 0, 
+      color: 'indigo', 
+      observation: '', 
+      creditCardDueDate: undefined, 
+      creditLimit: undefined,
+      initialUsed: undefined
+    });
     setEditingId(null);
     setIsFormOpen(false);
     setWalletError('');
   };
 
   const handleEdit = (wallet: Wallet) => {
+    const isCredit = wallet.type === WalletType.CREDIT_CARD;
+    const currentUsed = isCredit
+      ? Math.max(0, (wallet.creditLimit || 0) - (wallet.balance || 0))
+      : 0;
     setFormData({
       name: wallet.name,
       type: wallet.type,
@@ -581,7 +621,8 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
       icon: wallet.icon,
       observation: wallet.observation || '',
       creditCardDueDate: wallet.creditCardDueDate,
-      creditLimit: wallet.creditLimit
+      creditLimit: wallet.creditLimit,
+      initialUsed: isCredit ? currentUsed : wallet.initialUsed
     });
     setEditingId(wallet.id);
     setIsFormOpen(true);
@@ -617,10 +658,16 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    let dataToSave = { ...formData };
+    if (formData.type === WalletType.CREDIT_CARD) {
+      const limit = formData.creditLimit || 0;
+      const used = formData.initialUsed || 0;
+      dataToSave.balance = limit - used;
+    }
     if (editingId) {
-      onUpdate(editingId, formData);
+      onUpdate(editingId, dataToSave);
     } else {
-      onAdd(formData);
+      onAdd(dataToSave);
     }
     resetForm();
   };
@@ -728,39 +775,58 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
                         </select>
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Saldo Atual</label>
-                        <CurrencyInput
-                          required
-                          value={formData.balance}
-                          onChangeValue={val => setFormData({ ...formData, balance: parseFloat(val) || 0 })}
-                          className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
-                        />
-                      </div>
-
-                      {formData.type === WalletType.CREDIT_CARD && (
+                      {formData.type === WalletType.CREDIT_CARD ? (
                         <>
                           <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Limite Total do Cartão (Opcional)</label>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                              Limite Total do Cartão
+                            </label>
                             <CurrencyInput
+                              required
                               value={formData.creditLimit || 0}
-                              onChangeValue={val => setFormData({ ...formData, creditLimit: parseFloat(val) || 0 })}
+                              onChangeValue={val => {
+                                const lim = parseFloat(val) || 0;
+                                setFormData(prev => ({
+                                  ...prev,
+                                  creditLimit: lim,
+                                  balance: lim - (prev.initialUsed || 0)
+                                }));
+                              }}
                               className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
                             />
                           </div>
+
                           <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Dia do Vencimento (Opcional)</label>
-                            <input
-                              type="number"
-                              min="1"
-                              max="31"
-                              value={formData.creditCardDueDate || ''}
-                              onChange={e => setFormData({ ...formData, creditCardDueDate: parseInt(e.target.value) || undefined })}
-                              placeholder="Ex: 10"
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                              Valor Atual Usado / Fatura
+                            </label>
+                            <CurrencyInput
+                              value={formData.initialUsed || 0}
+                              onChangeValue={val => {
+                                const used = parseFloat(val) || 0;
+                                setFormData(prev => ({
+                                  ...prev,
+                                  initialUsed: used,
+                                  balance: (prev.creditLimit || 0) - used
+                                }));
+                              }}
                               className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
                             />
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                              Valor atualmente usado do limite. Se você zerar (0,00), a fatura/uso fica zerada e o limite fica 100% disponível.
+                            </p>
                           </div>
                         </>
+                      ) : (
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Saldo Atual</label>
+                          <CurrencyInput
+                            required
+                            value={formData.balance}
+                            onChangeValue={val => setFormData({ ...formData, balance: parseFloat(val) || 0 })}
+                            className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+                          />
+                        </div>
                       )}
 
                       <div className="md:col-span-2">
@@ -957,43 +1023,40 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
                     </div>
                   </div>
 
-                  {/* Body: Balance & Invoice Details */}
+                  {/* Body: Balance */}
                   <div className="relative z-10 my-auto py-1">
                     <div>
                       <p className="text-[10px] text-white/75 uppercase font-semibold tracking-wider">
-                        {isCreditCard ? 'Saldo do Cartão' : 'Saldo Disponível'}
+                        {isCreditCard ? 'Saldo Disponível (Limite)' : 'Saldo Disponível'}
                       </p>
                       <p className="text-xl font-black text-white tracking-tight">
-                        {formatCurrency(wallet.balance)}
+                        {formatCurrency(isCreditCard ? getCreditCardMetrics(wallet, transactions).availableBalance : wallet.balance)}
                       </p>
                     </div>
 
-                    {isCreditCard && (
-                      <div className="mt-2 pt-2 border-t border-white/15">
-                        <div className="flex justify-between items-center text-[10px] text-white/85 font-semibold">
-                          <span>Fatura Atual: {formatCurrency(currentInvoice)}</span>
-                          {wallet.creditCardDueDate && (
-                            <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded font-bold">
-                              Venc. {formatDateDMY(nextDue)}
-                            </span>
-                          )}
-                        </div>
-                        {wallet.creditLimit ? (
-                          <div className="mt-1">
-                            <div className="flex justify-between text-[9px] text-white/70">
-                              <span>Lim: {formatCurrency(wallet.creditLimit)}</span>
-                              <span>Disp: {formatCurrency(Math.max(0, wallet.creditLimit - currentInvoice))}</span>
-                            </div>
+                    {isCreditCard && (() => {
+                      const metrics = getCreditCardMetrics(wallet, transactions);
+                      return (
+                        <div className="mt-2 pt-1.5 border-t border-white/15 text-[10px] text-white/85 space-y-0.5">
+                          <div className="flex justify-between font-semibold">
+                            <span className="text-white/70">Limite Total:</span>
+                            <span>{formatCurrency(metrics.creditLimit)}</span>
+                          </div>
+                          <div className="flex justify-between font-semibold">
+                            <span className="text-white/70">Valor Usado:</span>
+                            <span>{formatCurrency(metrics.totalUsed)}</span>
+                          </div>
+                          {metrics.creditLimit > 0 && (
                             <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden mt-1">
                               <div 
                                 className="h-full bg-white rounded-full transition-all" 
-                                style={{ width: `${Math.min(100, (currentInvoice / wallet.creditLimit) * 100)}%` }} 
+                                style={{ width: `${Math.min(100, Math.max(0, (metrics.totalUsed / metrics.creditLimit) * 100))}%` }} 
                               />
                             </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {wallet.observation && (
                       <p className="text-[10px] text-white/70 mt-1 line-clamp-1 italic">
@@ -1025,29 +1088,6 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
                           {isMealTicket ? 'Benefício' : 'Recarga'}
                         </button>
                       </div>
-
-                      {isCreditCard && creditSummary && (
-                        <div className="grid grid-cols-2 gap-1.5 mt-0.5">
-                          <button
-                            type="button"
-                            onClick={() => handleStartPayInvoice(creditSummary)}
-                            className="py-1 px-1.5 bg-indigo-500/80 hover:bg-indigo-600 text-white font-bold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1"
-                            title="Pagar fatura"
-                          >
-                            <CheckCircle className="w-3 h-3 shrink-0" />
-                            Pagar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setManagingInstallmentsCard(wallet)}
-                            className="py-1 px-1.5 bg-white/10 hover:bg-white/20 text-white font-bold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1"
-                            title="Ver parcelas"
-                          >
-                            <Layers className="w-3 h-3 text-purple-200 shrink-0" />
-                            Parcelas
-                          </button>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -1391,10 +1431,10 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
             {/* Balance Banner */}
             <div className="bg-indigo-50/60 dark:bg-indigo-950/30 px-6 py-3 border-b border-indigo-100 dark:border-indigo-900/40 flex justify-between items-center text-xs">
               <span className="font-medium text-slate-600 dark:text-slate-300">
-                {usingBalanceWallet.type === WalletType.CREDIT_CARD ? 'Fatura / Limite Atual:' : 'Saldo Atual da Conta:'}
+                {usingBalanceWallet.type === WalletType.CREDIT_CARD ? 'Limite Disponível:' : 'Saldo Atual:'}
               </span>
               <span className="font-extrabold text-sm text-indigo-700 dark:text-indigo-300">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(usingBalanceWallet.balance)}
+                {formatCurrency(usingBalanceWallet.type === WalletType.CREDIT_CARD ? getCreditCardMetrics(usingBalanceWallet, transactions).availableBalance : usingBalanceWallet.balance)}
               </span>
             </div>
 

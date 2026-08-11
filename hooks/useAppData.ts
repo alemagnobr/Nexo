@@ -314,6 +314,17 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
   };
 
   const addTransaction = async (t: Omit<Transaction, "id">) => {
+    if (t.status === "paid" && t.type === "expense" && t.walletId) {
+      const wallet = data.wallets?.find((w) => w.id === t.walletId);
+      if (wallet && Number(t.amount) > wallet.balance + 0.001) {
+        const fmtAvail = wallet.balance.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        const fmtAmt = Number(t.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        const errorMsg = `Transação não permitida: A conta ou cartão "${wallet.name}" não possui margem/saldo suficiente.\n\nDisponível: ${fmtAvail}\nTentado: ${fmtAmt}`;
+        alert(errorMsg);
+        return;
+      }
+    }
+
     const newTransaction: Transaction = { ...t, id: crypto.randomUUID() };
     if (user) await addTransactionFire(user.uid, newTransaction);
     else
@@ -370,6 +381,18 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
     if (isNowPaid && newWalletId) {
       const applyAdj = newType === "income" ? newAmount : -newAmount;
       walletChanges[newWalletId] = (walletChanges[newWalletId] || 0) + applyAdj;
+    }
+
+    // Check if any wallet balance drops below 0 due to this update
+    for (const [wId, change] of Object.entries(walletChanges)) {
+      if (change < 0) {
+        const wallet = data.wallets?.find((w) => w.id === wId);
+        if (wallet && wallet.balance + change < -0.01) {
+          const fmtAvail = wallet.balance.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+          alert(`Operação não permitida: A conta ou cartão "${wallet.name}" não possui margem/saldo suficiente.\n\nDisponível: ${fmtAvail}`);
+          return;
+        }
+      }
     }
 
     // --- OPTIMISTIC UPDATES ---
@@ -529,6 +552,16 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
     const newStatus: TransactionStatus =
       targetTransaction.status === "paid" ? "pending" : "paid";
     const finalWalletId = walletId || targetTransaction.walletId;
+
+    if (newStatus === "paid" && targetTransaction.type === "expense" && finalWalletId) {
+      const wallet = data.wallets?.find((w) => w.id === finalWalletId);
+      if (wallet && Number(targetTransaction.amount) > wallet.balance + 0.001) {
+        const fmtAvail = wallet.balance.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        const fmtAmt = Number(targetTransaction.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        alert(`Operação não permitida: A conta ou cartão "${wallet.name}" não possui margem/saldo suficiente.\n\nDisponível: ${fmtAvail}\nTentado: ${fmtAmt}`);
+        return;
+      }
+    }
 
     // --- OPTIMISTIC UPDATES ---
     setData((prev) => {

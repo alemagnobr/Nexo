@@ -20,6 +20,7 @@ export interface Wallet {
   observation?: string; // Observação opcional para a carteira
   creditCardDueDate?: number; // Dia do vencimento
   creditLimit?: number; // Limite total
+  initialUsed?: number; // Valor já usado inserido manualmente
   lastPaymentDate?: string; // Data do último pagamento de fatura
   nextDueDate?: string; // Próxima data de vencimento de fatura
 }

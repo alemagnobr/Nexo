@@ -1,5 +1,5 @@
 
-import { AppData, Transaction, Investment, Budget, Debt, ShoppingItem, RegisteredProduct, InventoryItem, ReplenishmentLog, WealthProfile, KanbanColumn, KanbanBoard, Note, Category, PasswordEntry, AgendaEvent, TaskList, Task, PixKey, Habit, Wallet, DailyRoutine, WorkGoal, WorkoutProject, WorkoutRoutine } from '../types';
+import { AppData, Transaction, Investment, Budget, Debt, ShoppingItem, RegisteredProduct, InventoryItem, ReplenishmentLog, WealthProfile, KanbanColumn, KanbanBoard, Note, Category, PasswordEntry, AgendaEvent, TaskList, Task, PixKey, Habit, Wallet, DailyRoutine, WorkGoal, WorkProject, WorkoutProject, WorkoutRoutine } from '../types';
 import { db } from './firebase';
 import { toast } from 'sonner';
 import { 
@@ -301,6 +301,13 @@ export const subscribeToData = (uid: string, onUpdate: (data: Partial<AppData>) 
     onUpdate({ wallets });
   }, (error) => {
     handleFirestoreError(error, "Erro ao assinar carteiras");
+  });
+
+  const unsubWorkProjects = onSnapshot(collection(db, 'users', uid, 'workProjects'), (snapshot) => {
+    const workProjects = snapshot.docs.map(doc => doc.data() as WorkProject);
+    onUpdate({ workProjects });
+  }, (error) => {
+    handleFirestoreError(error, "Erro ao assinar projetos de trabalho");
   });
 
   const unsubWorkGoals = onSnapshot(collection(db, 'users', uid, 'workGoals'), (snapshot) => {
@@ -948,7 +955,29 @@ export const deleteWorkoutRoutineFire = async (uid: string, id: string) => {
   }
 };
 
-// --- WORK GOALS ---
+// --- WORK PROJECTS & GOALS ---
+export const addWorkProjectFire = async (uid: string, project: WorkProject) => {
+  try {
+    await setDoc(doc(db, 'users', uid, 'workProjects', project.id), project);
+  } catch (error) {
+    handleFirestoreError(error, "Erro ao adicionar projeto de trabalho");
+  }
+};
+export const updateWorkProjectFire = async (uid: string, id: string, data: Partial<WorkProject>) => {
+  try {
+    await updateDoc(doc(db, 'users', uid, 'workProjects', id), data);
+  } catch (error) {
+    handleFirestoreError(error, "Erro ao atualizar projeto de trabalho");
+  }
+};
+export const deleteWorkProjectFire = async (uid: string, id: string) => {
+  try {
+    await deleteDoc(doc(db, 'users', uid, 'workProjects', id));
+  } catch (error) {
+    handleFirestoreError(error, "Erro ao excluir projeto de trabalho");
+  }
+};
+
 export const addWorkGoalFire = async (uid: string, goal: WorkGoal) => {
   try {
     await setDoc(doc(db, 'users', uid, 'workGoals', goal.id), goal);

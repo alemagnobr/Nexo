@@ -344,6 +344,7 @@ export interface AppData {
   tasks: Task[]; // Novo campo: Tarefas
   pixKeys: PixKey[]; // Novo campo: Chaves Pix
   habits: Habit[]; // Novo campo: Hábitos
+  workProjects?: WorkProject[]; // Projetos de Trabalho
   workGoals?: WorkGoal[]; // Metas de Trabalho
   dailyRoutines?: DailyRoutine[]; // Checklists diárias que resetam
   unlockedBadges: string[];
@@ -498,8 +499,33 @@ export interface WorkoutRoutine {
 
 export type WorkGoalUnit = 'hours' | 'minutes' | 'deliveries';
 
+export interface WorkProject {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface WorkGoalFinalization {
+  id: string;
+  finalizedAt: string;
+  startDate?: string;
+  endDate?: string;
+  targetQuantity: number;
+  completedQuantity: number;
+  percentage: number;
+  unitType?: WorkGoalUnit;
+  unitValue?: number;
+  totalValue: number;
+  notes?: string;
+  historyEntries?: { id: string; date: string; hours: number; notes?: string; value?: number }[];
+}
+
 export interface WorkGoal {
   id: string;
+  projectId?: string;
   title: string;
   targetHours: number; // quantidade alvo (horas, minutos ou entregas)
   completedHours: number; // quantidade realizada acumulada
@@ -508,5 +534,8 @@ export interface WorkGoal {
   startDate?: string;
   deadline?: string;
   history?: { id: string; date: string; hours: number; notes?: string; value?: number }[];
+  finalizations?: WorkGoalFinalization[];
+  isCompleted?: boolean;
+  status?: 'active' | 'completed';
   createdAt: string;
 }

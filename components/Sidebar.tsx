@@ -114,7 +114,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { isActive, timeLeft, openModal, focusReason } = useFocus();
 
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
-    compras: true,
+    compras: false,
     financeiro: false,
     planejamento: false,
     saude: false,

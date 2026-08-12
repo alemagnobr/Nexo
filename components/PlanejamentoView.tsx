@@ -124,7 +124,11 @@ export const PlanejamentoView: React.FC<PlanejamentoViewProps> = ({
         )}
         {currentView === View.WORK_GOALS && (
           <WorkGoalsView 
+             projects={data.workProjects || []}
              goals={data.workGoals || []}
+             onAddProject={actions.addWorkProject}
+             onUpdateProject={actions.updateWorkProject}
+             onDeleteProject={actions.deleteWorkProject}
              onAddGoal={actions.addWorkGoal}
              onUpdateGoal={actions.updateWorkGoal}
              onDeleteGoal={actions.deleteWorkGoal}

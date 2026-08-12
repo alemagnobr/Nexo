@@ -26,6 +26,7 @@ import {
   Wallet,
   DailyRoutine,
   WorkGoal,
+  WorkProject,
   WorkoutProject,
   WorkoutRoutine,
 } from "../types";
@@ -87,6 +88,9 @@ import {
   addWorkGoalFire,
   updateWorkGoalFire,
   deleteWorkGoalFire,
+  addWorkProjectFire,
+  updateWorkProjectFire,
+  deleteWorkProjectFire,
   addWorkoutProjectFire,
   updateWorkoutProjectFire,
   deleteWorkoutProjectFire,
@@ -1623,6 +1627,39 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
       }));
   };
 
+  const addWorkProject = async (project: WorkProject) => {
+    if (user) {
+      await addWorkProjectFire(user.uid, project);
+    } else {
+      setData((prev) => ({
+        ...prev,
+        workProjects: [...(prev.workProjects || []), project],
+      }));
+    }
+  };
+
+  const updateWorkProject = async (id: string, partial: Partial<WorkProject>) => {
+    if (user) {
+      await updateWorkProjectFire(user.uid, id, partial);
+    } else {
+      setData((prev) => ({
+        ...prev,
+        workProjects: (prev.workProjects || []).map((p) => (p.id === id ? { ...p, ...partial } : p)),
+      }));
+    }
+  };
+
+  const deleteWorkProject = async (id: string) => {
+    if (user) {
+      await deleteWorkProjectFire(user.uid, id);
+    } else {
+      setData((prev) => ({
+        ...prev,
+        workProjects: (prev.workProjects || []).filter((p) => p.id !== id),
+      }));
+    }
+  };
+
   const addWorkGoal = async (goal: WorkGoal) => {
     if (user) {
       await addWorkGoalFire(user.uid, goal);
@@ -1830,6 +1867,9 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
       addWorkGoal,
       updateWorkGoal,
       deleteWorkGoal,
+      addWorkProject,
+      updateWorkProject,
+      deleteWorkProject,
       addWorkoutProject,
       updateWorkoutProject,
       deleteWorkoutProject,

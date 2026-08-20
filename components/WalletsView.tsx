@@ -736,8 +736,9 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
       {isExpanded && (
         <>
           {isFormOpen && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-              <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col my-auto max-h-[90vh] animate-scale-in border border-slate-200 dark:border-slate-700">
+            <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/60 backdrop-blur-sm">
+              <div className="flex min-h-full items-center justify-center p-4">
+               <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col my-8 animate-scale-in border border-slate-200 dark:border-slate-700 relative">
                 <div className="p-4 md:p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center sticky top-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur z-20">
                   <h3 className="text-xl font-bold text-slate-800 dark:text-white leading-tight">
                     {editingId ? 'Editar Conta' : 'Nova Conta'}
@@ -874,6 +875,7 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
                     </div>
                   </form>
                 </div>
+               </div>
               </div>
             </div>
           )}

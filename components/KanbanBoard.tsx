@@ -1203,9 +1203,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
       {/* Trello-like Card Modal */}
       {activeExpandedData && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-start justify-center p-4 py-10 md:p-10 overflow-y-auto" onClick={() => setExpandedCardId(null)}>
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm" onClick={() => setExpandedCardId(null)}>
+            <div className="flex min-h-full items-center justify-center p-4 md:p-10">
               <div 
-                  className="bg-white dark:bg-slate-900 rounded-xl w-full max-w-2xl my-auto shadow-2xl relative animate-scale-in"
+                  className="bg-white dark:bg-slate-900 rounded-xl w-full max-w-2xl shadow-2xl relative animate-scale-in"
                   onClick={e => e.stopPropagation()}
               >
                   {/* Header */}
@@ -1645,6 +1646,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                       </div>
                   </div>
               </div>
+            </div>
           </div>
       )}
     </div>

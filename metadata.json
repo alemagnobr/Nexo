@@ -1,5 +1,6 @@
 {
   "name": "NEXO",
   "description": "Seu hub financeiro inteligente com controle de despesas, investimentos e insights via IA.",
-  "requestFramePermissions": ["microphone"]
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

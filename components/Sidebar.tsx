@@ -45,6 +45,8 @@ import {
   ChevronRight,
   CheckSquare,
   Activity,
+  Coins,
+  TrendingUp,
 } from "lucide-react";
 import { View } from "../types";
 import { useFocus } from "../contexts/FocusContext";
@@ -114,8 +116,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { isActive, timeLeft, openModal, focusReason } = useFocus();
 
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
-    compras: false,
     financeiro: false,
+    investimentos: false,
+    compras: false,
     planejamento: false,
     saude: false,
   });
@@ -174,10 +177,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     View.TRANSACTIONS,
     View.SUBSCRIPTIONS,
     View.DEBTS,
-    View.INVESTMENTS,
     View.BUDGETS,
-    View.WEALTH_PLANNER,
     View.PIX_KEYS,
+  ].includes(currentView);
+
+  const isInvestimentosActive = [
+    View.INVESTMENTS_DASHBOARD,
+    View.INVESTMENTS,
+    View.FINANCIAL_CHALLENGES,
+    View.WEALTH_PLANNER,
   ].includes(currentView);
   
   const isComprasActive = [
@@ -347,18 +355,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
 
               <button
-                onClick={() => handleNavClick(View.INVESTMENTS)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                  currentView === View.INVESTMENTS
-                    ? "bg-blue-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`}
-              >
-                <LineChart className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                <span>Investimentos</span>
-              </button>
-
-              <button
                 onClick={() => handleNavClick(View.BUDGETS)}
                 className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                   currentView === View.BUDGETS
@@ -371,18 +367,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
 
               <button
-                onClick={() => handleNavClick(View.WEALTH_PLANNER)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                  currentView === View.WEALTH_PLANNER
-                    ? "bg-blue-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`}
-              >
-                <Landmark className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                <span>Aposentadoria</span>
-              </button>
-
-              <button
                 onClick={() => handleNavClick(View.PIX_KEYS)}
                 className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                   currentView === View.PIX_KEYS
@@ -392,6 +376,70 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <Key className="w-3.5 h-3.5 shrink-0 text-teal-400" />
                 <span>Pix</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Investimentos */}
+        <div className="space-y-1">
+          <button
+            onClick={() => toggleMenu("investimentos", View.INVESTMENTS_DASHBOARD)}
+            className={`flex w-full items-center justify-between px-3 py-2.5 rounded-xl transition-all text-xs font-bold ${
+              isInvestimentosActive
+                ? "bg-teal-600/20 text-teal-300 border border-teal-500/40 shadow-sm"
+                : "text-slate-400 hover:bg-slate-800/80 hover:text-white"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-1.5 rounded-lg ${isInvestimentosActive ? 'bg-teal-600 text-white' : 'bg-teal-500/10 text-teal-400'}`}>
+                <LineChart className="w-4 h-4" />
+              </div>
+              <span>Investimentos</span>
+            </div>
+            {(openMenus.investimentos ?? isInvestimentosActive) ? (
+              <ChevronDown className="w-4 h-4 text-slate-400" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-slate-400" />
+            )}
+          </button>
+
+          {(openMenus.investimentos ?? isInvestimentosActive) && (
+            <div className="pl-4 space-y-1 py-1 border-l-2 border-teal-500/30 ml-4">
+              <button
+                onClick={() => handleNavClick(View.INVESTMENTS)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.INVESTMENTS
+                    ? "bg-teal-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                <span>Meus Investimentos</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.FINANCIAL_CHALLENGES)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.FINANCIAL_CHALLENGES
+                    ? "bg-teal-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Coins className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                <span>Desafios Financeiros</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.WEALTH_PLANNER)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.WEALTH_PLANNER
+                    ? "bg-teal-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Landmark className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
+                <span>Aposentadoria</span>
               </button>
             </div>
           )}

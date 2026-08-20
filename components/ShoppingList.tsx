@@ -1196,19 +1196,20 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
                     Qtd / Unidade
                   </label>
-                  <div className="flex gap-2">
-                    <div className="flex items-center bg-slate-50 dark:bg-slate-900 rounded-xl p-1 border border-slate-300 dark:border-slate-600 shadow-sm flex-1">
+                  <div className="flex gap-2 items-stretch">
+                    <div className="flex items-center bg-slate-50 dark:bg-slate-900 rounded-xl px-2 py-1 border border-slate-300 dark:border-slate-600 shadow-sm flex-1 min-w-0">
                       <button
                         type="button"
                         onClick={() =>
-                          setNewItemQuantity(Math.max(1, newItemQuantity - 1))
+                          setNewItemQuantity(Math.max(1, Math.round((newItemQuantity - 1) * 100) / 100))
                         }
-                        className="p-2 text-slate-500 hover:text-indigo-600"
+                        className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 shrink-0 cursor-pointer rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                        aria-label="Diminuir quantidade"
                       >
                         <Minus className="w-4 h-4" />
                       </button>
@@ -1219,12 +1220,13 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                         onChange={(e) =>
                           setNewItemQuantity(Number(e.target.value) || 1)
                         }
-                        className="flex-1 w-full min-w-0 text-center font-bold text-slate-700 dark:text-white text-sm bg-transparent outline-none"
+                        className="flex-1 w-full min-w-[36px] text-center font-extrabold text-slate-800 dark:text-white text-base bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <button
                         type="button"
-                        onClick={() => setNewItemQuantity(newItemQuantity + 1)}
-                        className="p-2 text-slate-500 hover:text-indigo-600"
+                        onClick={() => setNewItemQuantity(Math.round((newItemQuantity + 1) * 100) / 100)}
+                        className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 shrink-0 cursor-pointer rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                        aria-label="Aumentar quantidade"
                       >
                         <Plus className="w-4 h-4" />
                       </button>
@@ -1232,7 +1234,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                     <select
                       value={newItemUnit}
                       onChange={(e) => setNewItemUnit(e.target.value)}
-                      className="w-20 p-2 rounded-xl border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm text-sm font-bold"
+                      className="w-24 p-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm text-sm font-bold shrink-0"
                     >
                       <option value="un">UN</option>
                       <option value="kg">KG</option>
@@ -1289,7 +1291,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
                     Categoria

@@ -324,6 +324,29 @@ export interface Habit {
   completedDates?: string[]; // Legacy
 }
 
+export interface FinancialChallengeEntry {
+  number: number; // 1 até N
+  amount: number; // R$ number
+  completedAt: string; // YYYY-MM-DD
+  note?: string;
+}
+
+export interface FinancialChallenge {
+  id: string;
+  title: string;
+  startNumber: number; // Sempre 1
+  targetNumber: number; // N (ex: 100, 500, 1000)
+  totalTargetAmount: number; // N * (N + 1) / 2
+  startDate: string; // YYYY-MM-DD
+  deadline?: string; // YYYY-MM-DD (prazo)
+  description?: string;
+  color?: string;
+  icon?: string;
+  completedEntries: Record<number, FinancialChallengeEntry>; // chave é o número (1..N)
+  createdAt: string;
+  status: 'active' | 'completed' | 'archived';
+}
+
 export interface AppData {
   transactions: Transaction[];
   categories: Category[]; // New field
@@ -344,6 +367,7 @@ export interface AppData {
   tasks: Task[]; // Novo campo: Tarefas
   pixKeys: PixKey[]; // Novo campo: Chaves Pix
   habits: Habit[]; // Novo campo: Hábitos
+  financialChallenges?: FinancialChallenge[]; // Desafio Financeiro (ex: 1 a 500, 1 a 1000)
   workProjects?: WorkProject[]; // Projetos de Trabalho
   workGoals?: WorkGoal[]; // Metas de Trabalho
   dailyRoutines?: DailyRoutine[]; // Checklists diárias que resetam
@@ -365,10 +389,12 @@ export interface AppData {
 export enum View {
   DASHBOARD = 'DASHBOARD',
   FINANCEIRO_DASHBOARD = 'FINANCEIRO_DASHBOARD',
+  INVESTMENTS_DASHBOARD = 'INVESTMENTS_DASHBOARD',
   PLANEJAMENTO_DASHBOARD = 'PLANEJAMENTO_DASHBOARD',
   SAUDE_DASHBOARD = 'SAUDE_DASHBOARD',
   TRANSACTIONS = 'TRANSACTIONS',
   INVESTMENTS = 'INVESTMENTS',
+  FINANCIAL_CHALLENGES = 'FINANCIAL_CHALLENGES',
   BUDGETS = 'BUDGETS',
   SUBSCRIPTIONS = 'SUBSCRIPTIONS',
   CALENDAR = 'CALENDAR',

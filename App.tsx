@@ -13,7 +13,8 @@ import {
   Landmark,
   CheckSquare,
   Activity,
-  LayoutDashboard
+  LayoutDashboard,
+  LineChart
 } from "lucide-react";
 import {
   View,
@@ -49,6 +50,7 @@ import { SettingsView } from "./components/SettingsView";
 
 // New Wrapper Views
 import { FinanceiroView } from "./components/FinanceiroView";
+import { InvestimentosView } from "./components/InvestimentosView";
 import { PlanejamentoView } from "./components/PlanejamentoView";
 import { ComprasView } from "./components/ComprasView";
 import { SaudeView } from "./components/SaudeView";
@@ -59,6 +61,32 @@ const PIX_NAME = "Alexandre Magno dos Santos Linhares";
 
 import { Toaster } from "sonner";
 
+const getInitialView = (): View => {
+  try {
+    // 1. Check URL hash first (e.g., #transactions, #TRANSACTIONS, #/transactions)
+    if (typeof window !== "undefined" && window.location.hash) {
+      const rawHash = window.location.hash.replace(/^#\/?/, "").trim();
+      const upperHash = rawHash.toUpperCase();
+      const match = Object.values(View).find(
+        (v) => v.toUpperCase() === upperHash
+      );
+      if (match) {
+        return match;
+      }
+    }
+    // 2. Check localStorage
+    if (typeof localStorage !== "undefined") {
+      const savedView = localStorage.getItem("nexo_current_view");
+      if (savedView && Object.values(View).includes(savedView as View)) {
+        return savedView as View;
+      }
+    }
+  } catch (e) {
+    console.error("Error reading initial view:", e);
+  }
+  return View.DASHBOARD;
+};
+
 const App: React.FC = () => {
   // Auth State
   const [user, setUser] = useState<User | null>(null);
@@ -68,12 +96,73 @@ const App: React.FC = () => {
   // Custom Hook for all Data Logic
   const { data, setData, actions } = useAppData(user, isGuest);
 
-  // UI State
-  const [currentView, setCurrentView] = useState<View>(View.DASHBOARD);
-  const [privacyMode, setPrivacyMode] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  // UI State - persisted across page refreshes
+  const [currentView, setCurrentView] = useState<View>(getInitialView);
+  const [privacyMode, setPrivacyMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("nexo_privacy_mode") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("nexo_dark_mode");
+      if (saved !== null) return saved === "true";
+      return typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+    } catch {
+      return false;
+    }
+  });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Synchronize currentView with localStorage & URL hash
+  useEffect(() => {
+    try {
+      localStorage.setItem("nexo_current_view", currentView);
+      const targetHash = `#${currentView.toLowerCase()}`;
+      if (window.location.hash !== targetHash) {
+        window.history.replaceState(null, "", targetHash);
+      }
+    } catch (e) {
+      console.error("Error persisting current view:", e);
+    }
+  }, [currentView]);
+
+  // Listen to browser navigation (back/forward or hash change)
+  useEffect(() => {
+    const handleHashChange = () => {
+      try {
+        const rawHash = window.location.hash.replace(/^#\/?/, "").trim();
+        const upperHash = rawHash.toUpperCase();
+        const match = Object.values(View).find(
+          (v) => v.toUpperCase() === upperHash
+        );
+        if (match && match !== currentView) {
+          setCurrentView(match);
+        }
+      } catch (e) {
+        console.error("Error handling hash change:", e);
+      }
+    };
+
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [currentView]);
+
+  // Persist privacy and dark mode settings
+  useEffect(() => {
+    try {
+      localStorage.setItem("nexo_privacy_mode", String(privacyMode));
+    } catch (e) {}
+  }, [privacyMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("nexo_dark_mode", String(darkMode));
+    } catch (e) {}
+  }, [darkMode]);
 
   // PWA Install State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -155,6 +244,11 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
+    try {
+      localStorage.removeItem("nexo_current_view");
+      window.history.replaceState(null, "", "#dashboard");
+    } catch (e) {}
+    setCurrentView(View.DASHBOARD);
     if (isGuest) {
       setIsGuest(false);
       setData({
@@ -334,21 +428,41 @@ const App: React.FC = () => {
       );
     }
 
-    // 2. Group: Financeiro (Transactions, Subscriptions, Debts, Investments, Budgets, Wealth Planner, Pix Keys)
+    // 2. Group: Financeiro (Transactions, Subscriptions, Debts, Budgets, Pix Keys)
     if (
       [
         View.FINANCEIRO_DASHBOARD,
         View.TRANSACTIONS, 
         View.SUBSCRIPTIONS, 
         View.DEBTS, 
-        View.INVESTMENTS, 
         View.BUDGETS, 
-        View.WEALTH_PLANNER, 
         View.PIX_KEYS
       ].includes(currentView)
     ) {
       return (
         <FinanceiroView
+          currentView={currentView}
+          onNavigate={setCurrentView}
+          data={data}
+          actions={actions}
+          privacyMode={privacyMode}
+          hasApiKey={hasKey}
+          quickActionSignal={quickActionSignal}
+        />
+      );
+    }
+
+    // 2.5. Group: Investimentos (Meus Investimentos, Desafios Financeiros, Aposentadoria)
+    if (
+      [
+        View.INVESTMENTS_DASHBOARD,
+        View.INVESTMENTS,
+        View.FINANCIAL_CHALLENGES,
+        View.WEALTH_PLANNER
+      ].includes(currentView)
+    ) {
+      return (
+        <InvestimentosView
           currentView={currentView}
           onNavigate={setCurrentView}
           data={data}
@@ -551,12 +665,12 @@ const App: React.FC = () => {
           {[
             View.DASHBOARD,
             View.CALENDAR,
-            View.FINANCEIRO_DASHBOARD, View.TRANSACTIONS, View.SUBSCRIPTIONS, View.DEBTS, View.INVESTMENTS, View.BUDGETS, View.WEALTH_PLANNER, View.PIX_KEYS,
+            View.FINANCEIRO_DASHBOARD, View.TRANSACTIONS, View.SUBSCRIPTIONS, View.DEBTS, View.INVESTMENTS, View.INVESTMENTS_DASHBOARD, View.FINANCIAL_CHALLENGES, View.BUDGETS, View.WEALTH_PLANNER, View.PIX_KEYS,
             View.PLANEJAMENTO_DASHBOARD, View.KANBAN, View.NOTES, View.PRODUCTIVITY, View.WORK_GOALS, View.SHOPPING_LIST, View.PASSWORDS, View.INVENTORY,
             View.SAUDE_DASHBOARD, View.TREINO
           ].includes(currentView) && (
-            <div className="w-full overflow-x-auto scrollbar-hide pb-1 mb-5 px-1">
-              <div className="flex items-center justify-between gap-1 max-w-4xl p-1 bg-slate-900/90 dark:bg-slate-950/90 backdrop-blur-xl rounded-full mx-auto border border-slate-800/80 shadow-xl shadow-slate-950/30">
+            <div className="w-full overflow-x-auto scrollbar-hide pb-2 mb-4 px-1 -mx-1">
+              <div className="flex items-center justify-start md:justify-center gap-1.5 w-max min-w-full p-1.5 bg-slate-900/90 dark:bg-slate-950/90 backdrop-blur-xl rounded-full border border-slate-800/80 shadow-xl shadow-slate-950/30">
                 {[
                   { id: View.DASHBOARD, label: 'Visão Geral', icon: LayoutDashboard, 
                     activeBg: 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/30',
@@ -572,7 +686,12 @@ const App: React.FC = () => {
                     activeBg: 'bg-blue-600 text-white shadow-md shadow-blue-600/30 ring-1 ring-blue-400/30',
                     activeIcon: 'text-white',
                     inactiveIcon: 'text-blue-400',
-                    isActive: [View.FINANCEIRO_DASHBOARD, View.TRANSACTIONS, View.SUBSCRIPTIONS, View.DEBTS, View.INVESTMENTS, View.BUDGETS, View.WEALTH_PLANNER, View.PIX_KEYS].includes(currentView) },
+                    isActive: [View.FINANCEIRO_DASHBOARD, View.TRANSACTIONS, View.SUBSCRIPTIONS, View.DEBTS, View.BUDGETS, View.PIX_KEYS].includes(currentView) },
+                  { id: View.INVESTMENTS_DASHBOARD, label: 'Investimentos', icon: LineChart, 
+                    activeBg: 'bg-teal-600 text-white shadow-md shadow-teal-600/30 ring-1 ring-teal-400/30',
+                    activeIcon: 'text-white',
+                    inactiveIcon: 'text-teal-400',
+                    isActive: [View.INVESTMENTS_DASHBOARD, View.INVESTMENTS, View.FINANCIAL_CHALLENGES, View.WEALTH_PLANNER].includes(currentView) },
                   { id: View.SHOPPING_LIST, label: 'Compras', icon: ShoppingCart, 
                     activeBg: 'bg-amber-600 text-white shadow-md shadow-amber-600/30 ring-1 ring-amber-400/30',
                     activeIcon: 'text-white',

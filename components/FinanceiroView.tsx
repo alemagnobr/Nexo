@@ -3,11 +3,9 @@ import { View } from '../types';
 import { TransactionList } from './TransactionList';
 import { SubscriptionManager } from './SubscriptionManager';
 import { DebtManager } from './DebtManager';
-import { InvestmentList } from './InvestmentList';
 import { BudgetList } from './BudgetList';
-import { RetirementMachine } from './RetirementMachine';
 import { PixKeyManager } from './PixKeyManager';
-import { Receipt, Repeat, ShieldAlert, LineChart, Target, Landmark, Key, LayoutDashboard } from 'lucide-react';
+import { Receipt, Repeat, ShieldAlert, Target, Key } from 'lucide-react';
 
 interface FinanceiroViewProps {
   currentView: View;
@@ -49,28 +47,12 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
       activeBorder: 'border-rose-500/30 text-rose-700 dark:text-rose-300'
     },
     { 
-      id: View.INVESTMENTS, 
-      label: 'Investimentos', 
-      icon: LineChart,
-      iconColor: 'text-emerald-600 dark:text-emerald-400',
-      iconBg: 'bg-emerald-100/90 dark:bg-emerald-950/80',
-      activeBorder: 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
-    },
-    { 
       id: View.BUDGETS, 
       label: 'Orçamentos', 
       icon: Target,
       iconColor: 'text-sky-600 dark:text-sky-400',
       iconBg: 'bg-sky-100/90 dark:bg-sky-950/80',
       activeBorder: 'border-sky-500/30 text-sky-700 dark:text-sky-300'
-    },
-    { 
-      id: View.WEALTH_PLANNER, 
-      label: 'Aposentadoria', 
-      icon: Landmark,
-      iconColor: 'text-amber-600 dark:text-amber-400',
-      iconBg: 'bg-amber-100/90 dark:bg-amber-950/80',
-      activeBorder: 'border-amber-500/30 text-amber-700 dark:text-amber-300'
     },
     { 
       id: View.PIX_KEYS, 
@@ -123,14 +105,6 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                 <p className="text-slate-500 dark:text-slate-400 text-sm">Gerencie suas receitas, despesas e gastos.</p>
               </div>
 
-              <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2 cursor-pointer hover:border-emerald-300 transition-colors" onClick={() => onNavigate(View.INVESTMENTS)}>
-                <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
-                  <LineChart className="w-8 h-8" />
-                  <h3 className="text-lg font-bold">Investimentos</h3>
-                </div>
-                <p className="text-slate-500 dark:text-slate-400 text-sm">Acompanhe seus rendimentos e aportes.</p>
-              </div>
-
               <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2 cursor-pointer hover:border-rose-300 transition-colors" onClick={() => onNavigate(View.DEBTS)}>
                 <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400">
                   <ShieldAlert className="w-8 h-8" />
@@ -147,20 +121,20 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                 <p className="text-slate-500 dark:text-slate-400 text-sm">Defina limites e metas de gastos mensais.</p>
               </div>
 
-              <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2 cursor-pointer hover:border-amber-300 transition-colors" onClick={() => onNavigate(View.WEALTH_PLANNER)}>
-                <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400">
-                  <Landmark className="w-8 h-8" />
-                  <h3 className="text-lg font-bold">Máquina de Aposentadoria</h3>
-                </div>
-                <p className="text-slate-500 dark:text-slate-400 text-sm">Calcule quanto precisa para pagar seus custos fixos com investimentos.</p>
-              </div>
-
               <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2 cursor-pointer hover:border-purple-300 transition-colors" onClick={() => onNavigate(View.SUBSCRIPTIONS)}>
                 <div className="flex items-center gap-3 text-purple-600 dark:text-purple-400">
                   <Repeat className="w-8 h-8" />
                   <h3 className="text-lg font-bold">Assinaturas</h3>
                 </div>
                 <p className="text-slate-500 dark:text-slate-400 text-sm">Controle serviços mensais e assinaturas ativas.</p>
+              </div>
+
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2 cursor-pointer hover:border-teal-300 transition-colors" onClick={() => onNavigate(View.PIX_KEYS)}>
+                <div className="flex items-center gap-3 text-teal-600 dark:text-teal-400">
+                  <Key className="w-8 h-8" />
+                  <h3 className="text-lg font-bold">Chaves Pix</h3>
+                </div>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Gerencie e copie suas chaves Pix cadastradas.</p>
               </div>
               
             </div>
@@ -208,20 +182,6 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
             onUpdateScoreSerasa={(score) => actions.updateScoreSerasa(score, new Date().toISOString())}
           />
         )}
-        {currentView === View.INVESTMENTS && (
-          <InvestmentList 
-            investments={data.investments}
-            onAdd={actions.addInvestment}
-            onUpdate={actions.updateInvestment}
-            onDelete={actions.deleteInvestment}
-            onNavigate={onNavigate}
-            privacyMode={privacyMode}
-            hasApiKey={hasApiKey}
-            quickActionSignal={quickActionSignal}
-            wallets={data.wallets || []}
-            onAddTransaction={actions.addTransaction}
-          />
-        )}
         {currentView === View.BUDGETS && (
           <BudgetList 
             budgets={data.budgets || []} 
@@ -233,16 +193,6 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
             onNavigate={onNavigate} 
             privacyMode={privacyMode} 
             quickActionSignal={quickActionSignal}
-          />
-        )}
-        {currentView === View.WEALTH_PLANNER && (
-          <RetirementMachine 
-             data={data}
-             actions={actions}
-             onSaveProfile={actions.saveWealthProfile}
-             onNavigateToInvestments={() => onNavigate(View.INVESTMENTS)}
-             privacyMode={privacyMode}
-             hasApiKey={hasApiKey}
           />
         )}
         {currentView === View.PIX_KEYS && (

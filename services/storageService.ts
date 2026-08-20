@@ -1,5 +1,5 @@
 
-import { AppData, Transaction, Investment, Budget, Debt, ShoppingItem, RegisteredProduct, InventoryItem, ReplenishmentLog, WealthProfile, KanbanColumn, KanbanBoard, Note, Category, PasswordEntry, AgendaEvent, TaskList, Task, PixKey, Habit, Wallet, DailyRoutine, WorkGoal, WorkProject, WorkoutProject, WorkoutRoutine } from '../types';
+import { AppData, Transaction, Investment, Budget, Debt, ShoppingItem, RegisteredProduct, InventoryItem, ReplenishmentLog, WealthProfile, KanbanColumn, KanbanBoard, Note, Category, PasswordEntry, AgendaEvent, TaskList, Task, PixKey, Habit, FinancialChallenge, Wallet, DailyRoutine, WorkGoal, WorkProject, WorkoutProject, WorkoutRoutine } from '../types';
 import { db } from './firebase';
 import { toast } from 'sonner';
 import { 
@@ -55,6 +55,7 @@ const DEFAULT_DATA: AppData = {
   tasks: [],
   pixKeys: [],
   habits: [],
+  financialChallenges: [],
   unlockedBadges: [],
   wallets: [],
   walletBalance: 0
@@ -90,6 +91,7 @@ export const loadData = (userId?: string): AppData => {
     if (!data.tasks) data.tasks = [];
     if (!data.pixKeys) data.pixKeys = [];
     if (!data.habits) data.habits = [];
+    if (!data.financialChallenges) data.financialChallenges = [];
     if (!data.wallets) data.wallets = [];
     if (!data.categories || data.categories.length === 0) data.categories = DEFAULT_CATEGORIES;
     if (data.shoppingBudget === undefined) data.shoppingBudget = 0;
@@ -289,6 +291,13 @@ export const subscribeToData = (uid: string, onUpdate: (data: Partial<AppData>) 
     handleFirestoreError(error, "Erro ao assinar hábitos");
   });
 
+  const unsubFinancialChallenges = onSnapshot(query(collection(db, 'users', uid, 'financialChallenges'), orderBy('createdAt', 'asc')), (snapshot) => {
+    const financialChallenges = snapshot.docs.map(doc => doc.data() as FinancialChallenge);
+    onUpdate({ financialChallenges });
+  }, (error) => {
+    handleFirestoreError(error, "Erro ao assinar desafios financeiros");
+  });
+
   const unsubDailyRoutines = onSnapshot(collection(db, 'users', uid, 'dailyRoutines'), (snapshot) => {
     const dailyRoutines = snapshot.docs.map(doc => doc.data() as DailyRoutine);
     onUpdate({ dailyRoutines });
@@ -383,6 +392,7 @@ export const subscribeToData = (uid: string, onUpdate: (data: Partial<AppData>) 
     unsubTasks();
     unsubPixKeys();
     unsubHabits();
+    unsubFinancialChallenges();
     unsubDailyRoutines();
     unsubWallets();
     unsubWorkGoals();
@@ -878,6 +888,29 @@ export const deleteHabitFire = async (uid: string, id: string) => {
     }
 };
 
+// --- FINANCIAL CHALLENGES ---
+export const addFinancialChallengeFire = async (uid: string, challenge: FinancialChallenge) => {
+    try {
+      await setDoc(doc(db, 'users', uid, 'financialChallenges', challenge.id), challenge);
+    } catch (error) {
+      handleFirestoreError(error, "Erro ao adicionar desafio financeiro");
+    }
+};
+export const updateFinancialChallengeFire = async (uid: string, id: string, data: Partial<FinancialChallenge>) => {
+    try {
+      await updateDoc(doc(db, 'users', uid, 'financialChallenges', id), data);
+    } catch (error) {
+      handleFirestoreError(error, "Erro ao atualizar desafio financeiro");
+    }
+};
+export const deleteFinancialChallengeFire = async (uid: string, id: string) => {
+    try {
+      await deleteDoc(doc(db, 'users', uid, 'financialChallenges', id));
+    } catch (error) {
+      handleFirestoreError(error, "Erro ao excluir desafio financeiro");
+    }
+};
+
 // --- DAILY ROUTINES ---
 export const addDailyRoutineFire = async (uid: string, routine: DailyRoutine) => {
   try {
@@ -1162,6 +1195,11 @@ export const migrateLocalToCloud = async (uid: string, localData: AppData) => {
       localData.habits?.forEach(h => {
           const ref = doc(db, 'users', uid, 'habits', h.id);
           batch.set(ref, h);
+      });
+
+      localData.financialChallenges?.forEach(fc => {
+          const ref = doc(db, 'users', uid, 'financialChallenges', fc.id);
+          batch.set(ref, fc);
       });
 
       // Migrating categories

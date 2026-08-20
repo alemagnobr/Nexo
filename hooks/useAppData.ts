@@ -23,6 +23,7 @@ import {
   TaskList,
   Task,
   Habit,
+  FinancialChallenge,
   Wallet,
   DailyRoutine,
   WorkGoal,
@@ -82,6 +83,9 @@ import {
   addHabitFire,
   updateHabitFire,
   deleteHabitFire,
+  addFinancialChallengeFire,
+  updateFinancialChallengeFire,
+  deleteFinancialChallengeFire,
   addDailyRoutineFire,
   updateDailyRoutineFire,
   deleteDailyRoutineFire,
@@ -1346,6 +1350,116 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
     }
   };
 
+  // --- FINANCIAL CHALLENGES ACTIONS ---
+  const addFinancialChallenge = async (
+    challenge: {
+      title?: string;
+      targetNumber: number;
+      startDate?: string;
+      deadline?: string;
+      description?: string;
+      color?: string;
+      icon?: string;
+    }
+  ) => {
+    const targetN = Math.max(2, Math.min(5000, challenge.targetNumber || 100));
+    const totalTarget = (targetN * (targetN + 1)) / 2;
+    const newChallenge: FinancialChallenge = {
+      id: crypto.randomUUID(),
+      title: challenge.title?.trim() || `Desafio 1 a ${targetN}`,
+      startNumber: 1,
+      targetNumber: targetN,
+      totalTargetAmount: totalTarget,
+      startDate: challenge.startDate || new Date().toISOString().split('T')[0],
+      deadline: challenge.deadline || undefined,
+      description: challenge.description?.trim() || '',
+      color: challenge.color || '#10b981',
+      icon: challenge.icon || '💰',
+      completedEntries: {},
+      createdAt: new Date().toISOString(),
+      status: 'active',
+    };
+
+    if (user) {
+      await addFinancialChallengeFire(user.uid, newChallenge);
+    } else {
+      setData((prev) => ({
+        ...prev,
+        financialChallenges: [...(prev.financialChallenges || []), newChallenge],
+      }));
+    }
+  };
+
+  const updateFinancialChallenge = async (id: string, updates: Partial<FinancialChallenge>) => {
+    if (user) {
+      await updateFinancialChallengeFire(user.uid, id, updates);
+    } else {
+      setData((prev) => ({
+        ...prev,
+        financialChallenges: (prev.financialChallenges || []).map((fc) =>
+          fc.id === id ? { ...fc, ...updates } : fc
+        ),
+      }));
+    }
+  };
+
+  const deleteFinancialChallenge = async (id: string) => {
+    if (user) {
+      await deleteFinancialChallengeFire(user.uid, id);
+    } else {
+      setData((prev) => ({
+        ...prev,
+        financialChallenges: (prev.financialChallenges || []).filter((fc) => fc.id !== id),
+      }));
+    }
+  };
+
+  const toggleFinancialChallengeEntry = async (
+    id: string,
+    num: number,
+    completedAt?: string,
+    note?: string
+  ) => {
+    const challenge = (data.financialChallenges || []).find((fc) => fc.id === id);
+    if (!challenge) return;
+
+    const currentEntries = { ...(challenge.completedEntries || {}) };
+    const dateStr = completedAt || new Date().toISOString().split('T')[0];
+
+    if (currentEntries[num]) {
+      // Unmark / remove
+      delete currentEntries[num];
+    } else {
+      // Mark as concluded
+      currentEntries[num] = {
+        number: num,
+        amount: num,
+        completedAt: dateStr,
+        note: note || undefined,
+      };
+    }
+
+    const completedCount = Object.keys(currentEntries).length;
+    const isCompleted = completedCount >= challenge.targetNumber;
+    const newStatus = isCompleted ? 'completed' : 'active';
+
+    const updates: Partial<FinancialChallenge> = {
+      completedEntries: currentEntries,
+      status: newStatus,
+    };
+
+    if (user) {
+      await updateFinancialChallengeFire(user.uid, id, updates);
+    } else {
+      setData((prev) => ({
+        ...prev,
+        financialChallenges: (prev.financialChallenges || []).map((fc) =>
+          fc.id === id ? { ...fc, ...updates } : fc
+        ),
+      }));
+    }
+  };
+
   // --- WALLETS ---
   const addWallet = async (w: Omit<Wallet, "id">) => {
     const newWallet: Wallet = { ...w, id: crypto.randomUUID() };
@@ -1848,6 +1962,10 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
       updateHabit,
       deleteHabit,
       toggleHabitEntry,
+      addFinancialChallenge,
+      updateFinancialChallenge,
+      deleteFinancialChallenge,
+      toggleFinancialChallengeEntry,
       addWallet,
       updateWallet,
       deleteWallet,

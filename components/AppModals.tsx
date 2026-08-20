@@ -31,8 +31,9 @@ export const AppModals: React.FC<AppModalsProps> = ({
     <>
       {/* WELCOME MODAL */}
       {showWelcome && (
-          <div className="fixed inset-0 bg-slate-900/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in overflow-y-auto">
-             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 dark:border-slate-700 animate-scale-in my-8">
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/90 backdrop-blur-sm animate-fade-in">
+            <div className="flex min-h-full items-center justify-center p-4">
+             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 dark:border-slate-700 animate-scale-in my-8 relative">
                  <div className="bg-slate-900 p-8 text-white relative overflow-hidden rounded-t-2xl">
                      <div className="relative z-10">
                         <h1 className="text-4xl font-bold mb-2">Bem-vindo ao NEXO</h1>
@@ -83,6 +84,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
                      </button>
                  </div>
              </div>
+            </div>
           </div>
       )}
 

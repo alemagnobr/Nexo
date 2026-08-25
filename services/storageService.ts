@@ -1,5 +1,5 @@
 
-import { AppData, Transaction, Investment, Budget, Debt, ShoppingItem, RegisteredProduct, InventoryItem, ReplenishmentLog, WealthProfile, KanbanColumn, KanbanBoard, Note, Category, PasswordEntry, AgendaEvent, TaskList, Task, PixKey, Habit, FinancialChallenge, Wallet, DailyRoutine, WorkGoal, WorkProject, WorkoutProject, WorkoutRoutine } from '../types';
+import { AppData, Transaction, Investment, Budget, Debt, ShoppingItem, RegisteredProduct, InventoryItem, ReplenishmentLog, WealthProfile, KanbanColumn, KanbanBoard, Note, Category, PasswordEntry, AgendaEvent, TaskList, Task, PixKey, Habit, FinancialChallenge, Wallet, DailyRoutine, WorkGoal, WorkProject, WorkoutProject, WorkoutRoutine, PersistedSnowballAIAnalysis } from '../types';
 import { db } from './firebase';
 import { toast } from 'sonner';
 import { 
@@ -363,6 +363,7 @@ export const subscribeToData = (uid: string, onUpdate: (data: Partial<AppData>) 
           if (data.wealthProfile) updates.wealthProfile = data.wealthProfile;
           if (data.driveLink) updates.driveLink = data.driveLink;
           if (data.shoppingBudget !== undefined) updates.shoppingBudget = data.shoppingBudget;
+          if (data.shoppingCategories) updates.shoppingCategories = data.shoppingCategories;
           if (data.walletBalance !== undefined) updates.walletBalance = data.walletBalance;
           if (data.scoreSerasa !== undefined) updates.scoreSerasa = data.scoreSerasa;
           if (data.scoreSerasaUpdatedAt !== undefined) updates.scoreSerasaUpdatedAt = data.scoreSerasaUpdatedAt;
@@ -648,7 +649,7 @@ export const clearShoppingListFire = async (uid: string, month?: string) => {
   }
 };
 
-// SHOPPING BUDGET
+// SHOPPING BUDGET & CATEGORIES
 export const updateShoppingBudgetFire = async (uid: string, amount: number) => {
     try {
       await setDoc(doc(db, 'users', uid), { 
@@ -656,6 +657,16 @@ export const updateShoppingBudgetFire = async (uid: string, amount: number) => {
       }, { merge: true });
     } catch (error) {
       handleFirestoreError(error, "Erro ao atualizar orçamento de compras");
+    }
+};
+
+export const updateShoppingCategoriesFire = async (uid: string, categories: string[]) => {
+    try {
+      await setDoc(doc(db, 'users', uid), { 
+          shoppingCategories: categories 
+      }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, "Erro ao atualizar categorias de compras");
     }
 };
 
@@ -671,6 +682,64 @@ export const updateScoreSerasaFire = async (uid: string, score: number, updatedA
     } catch (error) {
       handleFirestoreError(error, "Erro ao atualizar Score Serasa");
     }
+};
+
+// --- SNOWBALL AI PERSISTENCE ---
+const SNOWBALL_AI_STORAGE_KEY = 'nexo_snowball_ai_analysis_v2';
+
+export const saveSnowballAIAnalysisLocal = (analysis: PersistedSnowballAIAnalysis, userId?: string) => {
+  try {
+    const key = `${SNOWBALL_AI_STORAGE_KEY}_${userId || 'guest'}`;
+    localStorage.setItem(key, JSON.stringify(analysis));
+    localStorage.setItem(SNOWBALL_AI_STORAGE_KEY, JSON.stringify(analysis));
+  } catch (e) {
+    console.error("Failed to save Snowball AI analysis locally", e);
+  }
+};
+
+export const loadSnowballAIAnalysisLocal = (userId?: string): PersistedSnowballAIAnalysis | null => {
+  try {
+    const key = `${SNOWBALL_AI_STORAGE_KEY}_${userId || 'guest'}`;
+    const raw = localStorage.getItem(key) || localStorage.getItem(SNOWBALL_AI_STORAGE_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error("Failed to load Snowball AI analysis locally", e);
+  }
+  return null;
+};
+
+export const saveSnowballAIAnalysisFire = async (uid: string, analysis: PersistedSnowballAIAnalysis) => {
+  try {
+    await setDoc(doc(db, 'users', uid), {
+      snowballAIAnalysis: analysis
+    }, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, "Erro ao salvar análise da Bola de Neve no Firebase");
+  }
+};
+
+export const saveSnowballAIAnalysis = async (analysis: PersistedSnowballAIAnalysis, uid?: string) => {
+  saveSnowballAIAnalysisLocal(analysis, uid);
+  if (uid) {
+    await saveSnowballAIAnalysisFire(uid, analysis);
+  }
+};
+
+export const clearSnowballAIAnalysis = async (uid?: string) => {
+  try {
+    const key = `${SNOWBALL_AI_STORAGE_KEY}_${uid || 'guest'}`;
+    localStorage.removeItem(key);
+    localStorage.removeItem(SNOWBALL_AI_STORAGE_KEY);
+    if (uid) {
+      await updateDoc(doc(db, 'users', uid), {
+        snowballAIAnalysis: null
+      });
+    }
+  } catch (e) {
+    console.error("Failed to clear Snowball AI analysis", e);
+  }
 };
 
 // KANBAN
@@ -1220,6 +1289,7 @@ export const migrateLocalToCloud = async (uid: string, localData: AppData) => {
       };
       if (localData.wealthProfile) userData.wealthProfile = localData.wealthProfile;
       if (localData.driveLink) userData.driveLink = localData.driveLink;
+      if (localData.shoppingCategories) userData.shoppingCategories = localData.shoppingCategories;
       
       batch.set(userRef, userData, { merge: true });
 

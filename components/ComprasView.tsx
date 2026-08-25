@@ -144,7 +144,11 @@ export const ComprasView: React.FC<ComprasViewProps> = ({
              hasApiKey={hasApiKey}
              privacyMode={privacyMode}
              quickActionSignal={quickActionSignal}
+             shoppingCategories={data.shoppingCategories}
+             onAddShoppingCategory={actions.addShoppingCategory}
+             onDeleteShoppingCategory={actions.deleteShoppingCategory}
              onAddRegisteredProduct={actions.addRegisteredProduct}
+             onDeleteRegisteredProduct={actions.deleteRegisteredProduct}
              onAddInventoryItem={actions.addInventoryItem}
              onUpdateInventoryItem={actions.updateInventoryItem}
              onAddReplenishmentLog={actions.addReplenishmentLog}
@@ -156,6 +160,9 @@ export const ComprasView: React.FC<ComprasViewProps> = ({
              replenishmentLogs={data.replenishmentHistory || []}
              shoppingList={data.shoppingList || []}
              registeredProducts={data.registeredProducts || []}
+             shoppingCategories={data.shoppingCategories}
+             onAddShoppingCategory={actions.addShoppingCategory}
+             onDeleteShoppingCategory={actions.deleteShoppingCategory}
              onAdd={actions.addInventoryItem}
              onUpdate={actions.updateInventoryItem}
              onDelete={actions.deleteInventoryItem}
@@ -175,6 +182,7 @@ export const ComprasView: React.FC<ComprasViewProps> = ({
              }}
              onAddRegisteredProduct={actions.addRegisteredProduct}
              onUpdateRegisteredProduct={actions.updateRegisteredProduct}
+             onDeleteRegisteredProduct={actions.deleteRegisteredProduct}
              privacyMode={privacyMode}
           />
         )}

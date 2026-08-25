@@ -8,6 +8,7 @@ import {
   Debt,
   ShoppingItem,
   ShoppingCategory,
+  DEFAULT_SHOPPING_CATEGORIES,
   RegisteredProduct,
   InventoryItem,
   ReplenishmentLog,
@@ -57,6 +58,7 @@ import {
   addReplenishmentLogFire,
   clearReplenishmentHistoryFire,
   updateShoppingBudgetFire,
+  updateShoppingCategoriesFire,
   updateScoreSerasaFire,
   saveKanbanColumnFire,
   deleteKanbanColumnFire,
@@ -124,6 +126,7 @@ const DEFAULT_DATA: AppData = {
   inventoryList: [],
   replenishmentHistory: [],
   shoppingBudget: 0,
+  shoppingCategories: DEFAULT_SHOPPING_CATEGORIES,
   kanbanColumns: [],
   kanbanBoards: [],
   notes: [],
@@ -971,6 +974,34 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
   const setShoppingBudget = async (amount: number) => {
     if (user) await updateShoppingBudgetFire(user.uid, amount);
     else setData((prev) => ({ ...prev, shoppingBudget: amount }));
+  };
+
+  const addShoppingCategory = async (category: string) => {
+    const trimmed = category.trim();
+    if (!trimmed) return;
+    const current = (data.shoppingCategories && data.shoppingCategories.length > 0)
+      ? data.shoppingCategories
+      : DEFAULT_SHOPPING_CATEGORIES;
+    if (current.some(c => c.toLowerCase() === trimmed.toLowerCase())) return;
+    const next = [...current, trimmed];
+    if (user) await updateShoppingCategoriesFire(user.uid, next);
+    setData((prev) => ({ ...prev, shoppingCategories: next }));
+  };
+
+  const deleteShoppingCategory = async (category: string) => {
+    const trimmed = category.trim().toLowerCase();
+    const current = (data.shoppingCategories && data.shoppingCategories.length > 0)
+      ? data.shoppingCategories
+      : DEFAULT_SHOPPING_CATEGORIES;
+    const next = current.filter(c => c.toLowerCase() !== trimmed);
+    const finalCategories = next.length > 0 ? next : ['Outros'];
+    if (user) await updateShoppingCategoriesFire(user.uid, finalCategories);
+    setData((prev) => ({ ...prev, shoppingCategories: finalCategories }));
+  };
+
+  const updateShoppingCategories = async (categories: string[]) => {
+    if (user) await updateShoppingCategoriesFire(user.uid, categories);
+    setData((prev) => ({ ...prev, shoppingCategories: categories }));
   };
 
   const updateScoreSerasa = async (score: number, updatedAt: string) => {
@@ -1941,6 +1972,9 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
       clearReplenishmentHistory,
       clearShoppingList,
       setShoppingBudget,
+      addShoppingCategory,
+      deleteShoppingCategory,
+      updateShoppingCategories,
       updateScoreSerasa,
       saveKanbanColumn,
       deleteKanbanColumn,

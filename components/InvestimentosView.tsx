@@ -1,9 +1,10 @@
 import React from 'react';
 import { View } from '../types';
 import { InvestmentList } from './InvestmentList';
+import { SnowballView } from './SnowballView';
 import { FinancialChallengeView } from './FinancialChallengeView';
 import { RetirementMachine } from './RetirementMachine';
-import { LineChart, Coins, Landmark, TrendingUp, Trophy, ArrowRight, DollarSign, Target } from 'lucide-react';
+import { LineChart, Coins, Landmark, TrendingUp, Trophy, ArrowRight, DollarSign, Target, Snowflake, Zap } from 'lucide-react';
 
 interface InvestimentosViewProps {
   currentView: View;
@@ -34,6 +35,14 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
       activeBorder: 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300',
     },
     {
+      id: View.SNOWBALL,
+      label: 'Bola de Neve',
+      icon: Snowflake,
+      iconColor: 'text-cyan-600 dark:text-cyan-400',
+      iconBg: 'bg-cyan-100/90 dark:bg-cyan-950/80',
+      activeBorder: 'border-cyan-500/30 text-cyan-700 dark:text-cyan-300',
+    },
+    {
       id: View.FINANCIAL_CHALLENGES,
       label: 'Desafio Financeiro',
       icon: Coins,
@@ -59,6 +68,14 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
     const subTotal = Object.keys(entries).reduce((sub: number, k: string) => sub + Number(k), 0);
     return sum + subTotal;
   }, 0);
+
+  // Snowball quick count
+  const snowballCount = (data.investments || []).filter((inv: any) => 
+    inv.isSnowballActive || 
+    inv.type?.toLowerCase().includes('fii') || 
+    inv.type?.toLowerCase().includes('fiagro') ||
+    inv.sharesCount !== undefined
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -99,12 +116,12 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
                   Hub de Investimentos & Futuro
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Gerencie sua carteira, execute desafios de economia e planeje sua independência financeira.
+                  Gerencie sua carteira, execute a estratégia Bola de Neve (FIIs), desafios de economia e planeje sua aposentadoria.
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {/* Card 1: Meus Investimentos */}
               <div
                 className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between gap-4 cursor-pointer hover:border-emerald-400 hover:shadow-md transition-all group"
@@ -123,7 +140,7 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
                     Meus Investimentos
                   </h3>
                   <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
-                    Acompanhe sua carteira de ações, fundos imobiliários, renda fixa, cripto e caixinhas com metas.
+                    Acompanhe sua carteira geral de ações, fundos, renda fixa, cripto e caixinhas com metas.
                   </p>
                 </div>
 
@@ -140,7 +157,42 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
                 </div>
               </div>
 
-              {/* Card 2: Desafios Financeiros */}
+              {/* Card 2: Bola de Neve */}
+              <div
+                className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between gap-4 cursor-pointer hover:border-cyan-400 hover:shadow-md transition-all group"
+                onClick={() => onNavigate(View.SNOWBALL)}
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="p-3 bg-cyan-50 dark:bg-cyan-950/50 text-cyan-600 dark:text-cyan-400 rounded-xl">
+                      <Snowflake className="w-6 h-6 animate-pulse" />
+                    </div>
+                    <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/60 px-2.5 py-1 rounded-full border border-cyan-200/60 dark:border-cyan-800/60">
+                      {snowballCount} FIIs
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                    Bola de Neve
+                  </h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
+                    Estratégia do Número Mágico: descubra quando seus FIIs e Fiagros compram novas cotas sozinhos!
+                  </p>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Número Mágico</span>
+                    <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400">
+                      Auto-Recompra FII
+                    </span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 group-hover:bg-cyan-600 group-hover:text-white transition-all">
+                    <ArrowRight className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Desafios Financeiros */}
               <div
                 className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between gap-4 cursor-pointer hover:border-amber-400 hover:shadow-md transition-all group"
                 onClick={() => onNavigate(View.FINANCIAL_CHALLENGES)}
@@ -175,7 +227,7 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
                 </div>
               </div>
 
-              {/* Card 3: Aposentadoria */}
+              {/* Card 4: Aposentadoria */}
               <div
                 className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between gap-4 cursor-pointer hover:border-indigo-400 hover:shadow-md transition-all group"
                 onClick={() => onNavigate(View.WEALTH_PLANNER)}
@@ -199,9 +251,9 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
 
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
                   <div>
-                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Independência Financeira</span>
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Independência</span>
                     <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                      Planejamento de Liberdade
+                      Liberdade
                     </span>
                   </div>
                   <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 group-hover:bg-indigo-600 group-hover:text-white transition-all">
@@ -225,6 +277,19 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
             quickActionSignal={quickActionSignal}
             wallets={data.wallets || []}
             onAddTransaction={actions.addTransaction}
+          />
+        )}
+
+        {currentView === View.SNOWBALL && (
+          <SnowballView
+            investments={data.investments || []}
+            onAddInvestment={actions.addInvestment}
+            onUpdateInvestment={actions.updateInvestment}
+            onDeleteInvestment={actions.deleteInvestment}
+            privacyMode={privacyMode}
+            wallets={data.wallets || []}
+            onAddTransaction={actions.addTransaction}
+            onNavigateToAllInvestments={() => onNavigate(View.INVESTMENTS)}
           />
         )}
 

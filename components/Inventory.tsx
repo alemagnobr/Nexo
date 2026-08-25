@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Plus, 
   Minus, 
@@ -7,6 +7,7 @@ import {
   Search, 
   Package, 
   AlertTriangle, 
+  AlertCircle,
   Check, 
   ShoppingCart, 
   PlusCircle, 
@@ -23,7 +24,8 @@ import {
   RefreshCw,
   Star
 } from 'lucide-react';
-import { InventoryItem, ShoppingCategory, ReplenishmentLog, ShoppingItem, RegisteredProduct } from '../types';
+import { InventoryItem, ShoppingCategory, DEFAULT_SHOPPING_CATEGORIES, ReplenishmentLog, ShoppingItem, RegisteredProduct } from '../types';
+import { CategorySelector } from './CategorySelector';
 
 interface InventoryProps {
   items: InventoryItem[];
@@ -38,6 +40,10 @@ interface InventoryProps {
   onAddToShoppingList: (item: { name: string; category: any; unit: string; quantity: number; month?: string }) => void;
   onAddRegisteredProduct?: (product: Omit<RegisteredProduct, "id">) => Promise<any> | void;
   onUpdateRegisteredProduct?: (id: string, updates: Partial<RegisteredProduct>) => Promise<any> | void;
+  onDeleteRegisteredProduct?: (id: string) => Promise<any> | void;
+  shoppingCategories?: string[];
+  onAddShoppingCategory?: (category: string) => Promise<any> | void;
+  onDeleteShoppingCategory?: (category: string) => Promise<any> | void;
   privacyMode: boolean;
 }
 
@@ -80,8 +86,18 @@ export const Inventory: React.FC<InventoryProps> = ({
   onAddToShoppingList,
   onAddRegisteredProduct,
   onUpdateRegisteredProduct,
+  onDeleteRegisteredProduct,
+  shoppingCategories = DEFAULT_SHOPPING_CATEGORIES,
+  onAddShoppingCategory,
+  onDeleteShoppingCategory,
   privacyMode
 }) => {
+  const activeCategories = useMemo(() => {
+    const list = shoppingCategories && shoppingCategories.length > 0 ? shoppingCategories : DEFAULT_SHOPPING_CATEGORIES;
+    const itemCats = items.map((i) => i.category || 'Outros').filter(Boolean);
+    return Array.from(new Set([...list, ...itemCats]));
+  }, [shoppingCategories, items]);
+
   const [activeTab, setActiveTab] = useState<'stock' | 'history'>('stock');
 
   // Lançar para lista de compras (Modal & Lógica)
@@ -225,6 +241,33 @@ export const Inventory: React.FC<InventoryProps> = ({
       p => p.name.trim().toLowerCase() === itemName.trim().toLowerCase()
     );
   }, [registeredProducts, itemName]);
+
+  const existingInventoryItem = React.useMemo(() => {
+    if (!itemName.trim() || editingItem) return null;
+    return items.find(
+      i => i.name.trim().toLowerCase() === itemName.trim().toLowerCase()
+    );
+  }, [items, itemName, editingItem]);
+
+  const handleQuickRegister = async () => {
+    const trimmed = itemName.trim();
+    if (!trimmed) return;
+
+    if (onAddRegisteredProduct) {
+      try {
+        const category = itemCategory || "Outros";
+        const unit = itemUnit || "un";
+        await onAddRegisteredProduct({
+          name: trimmed,
+          category,
+          unit,
+        });
+      } catch (err) {
+        console.error("Erro ao cadastrar produto no catálogo pelo estoque:", err);
+      }
+    }
+    setShowProductSuggestions(false);
+  };
 
   const handleSelectProductSuggestion = (prod: RegisteredProduct) => {
     setItemName(prod.name);
@@ -624,7 +667,7 @@ export const Inventory: React.FC<InventoryProps> = ({
                   className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2 px-3 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="all">Todas Categorias</option>
-                  {CATEGORIES.map(cat => (
+                  {activeCategories.map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
@@ -1032,11 +1075,11 @@ export const Inventory: React.FC<InventoryProps> = ({
                   {selectedRegisteredProduct ? (
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/40">
                       <Sparkles className="w-3 h-3 text-emerald-500" />
-                      Vinculado ao Banco de Produtos
+                      Vinculado ao Catálogo
                     </span>
                   ) : (
                     <span className="text-[10px] text-slate-400 font-medium">
-                      Sincroniza automático com Lista de Compras
+                      Sincroniza com Lista de Compras
                     </span>
                   )}
                 </div>
@@ -1053,37 +1096,114 @@ export const Inventory: React.FC<InventoryProps> = ({
                       setShowProductSuggestions(true);
                     }}
                     className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    autoComplete="off"
                   />
 
-                  {showProductSuggestions && productSuggestions.length > 0 && (
-                    <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/50">
-                      <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900/60 text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center justify-between">
-                        <span>Sugestões do Banco de Produtos</span>
-                        <span>{productSuggestions.length} encontrado(s)</span>
+                  {existingInventoryItem && (
+                    <div className="mt-2 p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 text-amber-900 dark:text-amber-200 rounded-xl text-xs font-medium flex items-start gap-2 shadow-sm animate-fade-in">
+                      <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div className="text-[11px]">
+                        <span className="font-bold">Item já existente no estoque:</span> "{existingInventoryItem.name}" já possui {existingInventoryItem.quantity} {existingInventoryItem.unit || 'un'} cadastrado(s) em {existingInventoryItem.category || 'Outros'}.
                       </div>
-                      {productSuggestions.map((prod) => (
-                        <button
-                          key={prod.id}
-                          type="button"
-                          onClick={() => handleSelectProductSuggestion(prod)}
-                          className="w-full text-left px-3.5 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors flex items-center justify-between gap-2 text-xs"
-                        >
-                          <span className="font-bold text-slate-800 dark:text-white truncate">
-                            {prod.name}
-                          </span>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {prod.category && (
-                              <span className="px-2 py-0.5 text-[9px] font-semibold rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                                {prod.category}
-                              </span>
-                            )}
-                            <span className="text-[10px] font-mono text-slate-400">
-                              {prod.unit || 'un'}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
                     </div>
+                  )}
+
+                  {showProductSuggestions && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-20"
+                        onClick={() => setShowProductSuggestions(false)}
+                      />
+                      <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/60 animate-fade-in">
+                        {registeredProducts.length === 0 && !itemName.trim() ? (
+                          <div className="p-4 text-xs text-slate-500 dark:text-slate-400 text-center">
+                            Nenhum produto cadastrado no catálogo.
+                            <p className="text-[11px] text-indigo-500 dark:text-indigo-400 mt-1 font-bold">
+                              Digite o nome do produto acima para cadastrá-lo!
+                            </p>
+                          </div>
+                        ) : productSuggestions.length === 0 ? (
+                          <div className="p-4 text-xs text-slate-500 dark:text-slate-400 text-center flex flex-col gap-2.5">
+                            <div>Nenhum produto cadastrado no catálogo com este nome.</div>
+                            {itemName.trim() && (
+                              <button
+                                type="button"
+                                onClick={handleQuickRegister}
+                                className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+                              >
+                                <Plus className="w-4 h-4" />
+                                Cadastrar "{itemName.trim()}" no Catálogo
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900/60 text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center justify-between">
+                              <span>Sugestões do Catálogo ({productSuggestions.length})</span>
+                              <span className="text-[9px] text-indigo-500 font-bold">Clique para preencher</span>
+                            </div>
+                            {productSuggestions.map((prod) => (
+                              <div
+                                key={prod.id}
+                                className="w-full flex items-center justify-between hover:bg-indigo-50/50 dark:hover:bg-indigo-950/40 transition-colors group"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectProductSuggestion(prod)}
+                                  className="flex-1 text-left px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs cursor-pointer min-w-0"
+                                >
+                                  <span className="font-bold text-slate-800 dark:text-white truncate">
+                                    {prod.name}
+                                  </span>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {prod.category && (
+                                      <span className="px-2 py-0.5 text-[9px] font-semibold rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300">
+                                        {prod.category}
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
+                                      {prod.unit || 'un'}
+                                    </span>
+                                  </div>
+                                </button>
+                                {onDeleteRegisteredProduct && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (
+                                        window.confirm(
+                                          `Deseja excluir o produto "${prod.name}" permanentemente do catálogo?`,
+                                        )
+                                      ) {
+                                        onDeleteRegisteredProduct(prod.id);
+                                      }
+                                    }}
+                                    className="p-2 mr-2 text-slate-400 hover:text-rose-600 dark:text-slate-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer shrink-0"
+                                    title={`Excluir "${prod.name}" do catálogo`}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                            {itemName.trim() && !productSuggestions.some(p => p.name.toLowerCase() === itemName.toLowerCase().trim()) && (
+                              <button
+                                type="button"
+                                onClick={handleQuickRegister}
+                                className="w-full text-left px-3.5 py-2.5 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 flex items-center justify-between transition-colors border-t border-slate-100 dark:border-slate-700/60 font-bold text-xs cursor-pointer"
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <Plus className="w-4 h-4 text-indigo-500" />
+                                  <span>Cadastrar "{itemName.trim()}" no catálogo</span>
+                                </div>
+                                <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-500">Novo Produto</span>
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -1120,16 +1240,14 @@ export const Inventory: React.FC<InventoryProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 ml-1">Categoria</label>
-                  <select
+                  <CategorySelector
                     value={itemCategory}
-                    onChange={(e) => setItemCategory(e.target.value as ShoppingCategory)}
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {CATEGORIES.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                    onChange={(cat) => setItemCategory(cat as ShoppingCategory)}
+                    categories={activeCategories}
+                    onAddCategory={onAddShoppingCategory}
+                    onDeleteCategory={onDeleteShoppingCategory}
+                    compact
+                  />
                 </div>
 
                 <div>

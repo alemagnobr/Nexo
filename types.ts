@@ -76,6 +76,14 @@ export interface Investment {
   lastContribution?: number; // Valor do último aporte/investimento (adicionado para caixinhas)
   lastContributionDate?: string; // Data do último aporte
   history?: InvestmentHistory[];
+  // Campos Estratégia Bola de Neve (FIIs, Fiagros e Dividendos)
+  ticker?: string; // Ex: MXRF11, VGIA11, XPML11
+  sharesCount?: number; // Quantidade atual de cotas possuídas
+  sharePrice?: number; // Preço atual de cada cota (R$)
+  dividendPerShare?: number; // Rendimento / Dividendo médio mensal por cota (R$)
+  magicNumberTarget?: number; // Número mágico customizado (ou calculado automaticamente)
+  isSnowballActive?: boolean; // Se o ativo faz parte da estratégia Bola de Neve
+  fiiSegment?: string; // Papel / CRI, Tijolo / Logística, Shopping, Fiagro, FoF, Infra, Ações
 }
 
 export interface Budget {
@@ -101,7 +109,19 @@ export interface Debt {
   notes?: string;
 }
 
-export type ShoppingCategory = 'Hortifruti' | 'Carnes' | 'Laticínios' | 'Mercearia' | 'Bebidas' | 'Limpeza' | 'Higiene' | 'Padaria' | 'Outros';
+export type ShoppingCategory = 'Hortifruti' | 'Carnes' | 'Laticínios' | 'Mercearia' | 'Bebidas' | 'Limpeza' | 'Higiene' | 'Padaria' | 'Outros' | string;
+
+export const DEFAULT_SHOPPING_CATEGORIES: string[] = [
+  'Hortifruti',
+  'Carnes',
+  'Laticínios',
+  'Mercearia',
+  'Padaria',
+  'Bebidas',
+  'Limpeza',
+  'Higiene',
+  'Outros'
+];
 
 export interface ShoppingItem {
   id: string;
@@ -231,6 +251,15 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+// --- SNOWBALL AI PERSISTENCE TYPES ---
+export interface PersistedSnowballAIAnalysis {
+  recommendation: any; // SnowballAIRecommendation structure
+  contributionAmount: number;
+  lastAnalyzedAt: string; // ISO date string
+  isCustomAI: boolean;
+  notes?: string;
+}
+
 // --- WEALTH PLANNER TYPES ---
 export type RiskProfile = 'conservative' | 'moderate' | 'aggressive';
 
@@ -358,6 +387,7 @@ export interface AppData {
   inventoryList?: InventoryItem[];
   replenishmentHistory?: ReplenishmentLog[];
   shoppingBudget?: number; // Novo campo: Teto de gastos da ida ao mercado
+  shoppingCategories?: string[]; // Novo campo: Categorias de compras customizáveis
   kanbanColumns: KanbanColumn[]; // Legacy: Mantido para migração se necessário
   kanbanBoards: KanbanBoard[]; // Novo campo: Múltiplos Quadros
   notes: Note[]; // Novo campo: Notas
@@ -379,6 +409,7 @@ export interface AppData {
   scoreSerasa?: number;
   scoreSerasaUpdatedAt?: string;
   scoreSerasaHistory?: { score: number, date: string }[];
+  snowballAIAnalysis?: PersistedSnowballAIAnalysis;
   workoutProjects?: WorkoutProject[];
   workoutProjectPhases?: WorkoutProjectPhase[];
   workoutSteps?: WorkoutStep[];
@@ -394,6 +425,7 @@ export enum View {
   SAUDE_DASHBOARD = 'SAUDE_DASHBOARD',
   TRANSACTIONS = 'TRANSACTIONS',
   INVESTMENTS = 'INVESTMENTS',
+  SNOWBALL = 'SNOWBALL',
   FINANCIAL_CHALLENGES = 'FINANCIAL_CHALLENGES',
   BUDGETS = 'BUDGETS',
   SUBSCRIPTIONS = 'SUBSCRIPTIONS',

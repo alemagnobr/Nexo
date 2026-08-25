@@ -1,5 +1,13 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { ShoppingItem, ShoppingCategory, RegisteredProduct, InventoryItem, ReplenishmentLog } from "../types";
+import {
+  ShoppingItem,
+  ShoppingCategory,
+  DEFAULT_SHOPPING_CATEGORIES,
+  RegisteredProduct,
+  InventoryItem,
+  ReplenishmentLog,
+} from "../types";
+import { CategorySelector } from "./CategorySelector";
 import {
   Plus,
   Trash2,
@@ -14,6 +22,7 @@ import {
   ChefHat,
   Tag,
   AlertTriangle,
+  AlertCircle,
   List,
   Edit2,
   ChevronLeft,
@@ -51,7 +60,11 @@ interface ShoppingListProps {
 
   privacyMode: boolean;
   quickActionSignal?: number;
+  shoppingCategories?: string[];
+  onAddShoppingCategory?: (category: string) => Promise<any> | void;
+  onDeleteShoppingCategory?: (category: string) => Promise<any> | void;
   onAddRegisteredProduct?: (product: Omit<RegisteredProduct, "id">) => Promise<any>;
+  onDeleteRegisteredProduct?: (id: string) => Promise<any> | void;
   onAddInventoryItem?: (item: Omit<InventoryItem, "id">) => Promise<any> | void;
   onUpdateInventoryItem?: (id: string, updates: Partial<InventoryItem>) => Promise<any> | void;
   onAddReplenishmentLog?: (log: Omit<ReplenishmentLog, "id">) => Promise<any> | void;
@@ -83,7 +96,11 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
   hasApiKey = false,
   privacyMode,
   quickActionSignal,
+  shoppingCategories = DEFAULT_SHOPPING_CATEGORIES,
+  onAddShoppingCategory,
+  onDeleteShoppingCategory,
   onAddRegisteredProduct,
+  onDeleteRegisteredProduct,
   onAddInventoryItem,
   onUpdateInventoryItem,
   onAddReplenishmentLog,
@@ -325,43 +342,74 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
     [currentDate],
   );
 
+  // Search in shopping list
+  const [searchFilter, setSearchFilter] = useState("");
+
   // Budget Edit Mode
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [tempBudget, setTempBudget] = useState(shoppingBudget.toString());
 
-  // Filtered Items by Month
-  const filteredItems = useMemo(() => {
+  // Items for the current month
+  const monthItems = useMemo(() => {
     return items.filter((item) => item.month === monthStr);
   }, [items, monthStr]);
 
+  // Filtered Items by Search query
+  const filteredItems = useMemo(() => {
+    if (!searchFilter.trim()) {
+      return monthItems;
+    }
+    const term = searchFilter.toLowerCase().trim();
+    return monthItems.filter((item) =>
+      item.name.toLowerCase().includes(term) ||
+      (item.category && item.category.toLowerCase().includes(term)) ||
+      (item.brand && item.brand.toLowerCase().includes(term)) ||
+      (item.observation && item.observation.toLowerCase().includes(term))
+    );
+  }, [monthItems, searchFilter]);
+
   // Calculated Total
+  const existingItemInCurrentList = useMemo(() => {
+    const query = (newItemName || productSearch).trim().toLowerCase();
+    if (!query) return null;
+    return monthItems.find(
+      (item) => item.name.trim().toLowerCase() === query
+    );
+  }, [newItemName, productSearch, monthItems]);
+
   const forecastTotal = useMemo(() => {
-    return filteredItems.reduce((acc, item) => {
+    return monthItems.reduce((acc, item) => {
       const itemPrice = item.isChecked
         ? item.actualPrice
         : item.referencePrice || item.actualPrice || 0;
       return acc + itemPrice * item.quantity;
     }, 0);
-  }, [filteredItems]);
+  }, [monthItems]);
 
   const spentTotal = useMemo(() => {
-    return filteredItems.reduce((acc, item) => {
+    return monthItems.reduce((acc, item) => {
       return acc + (item.isChecked ? item.actualPrice * item.quantity : 0);
     }, 0);
-  }, [filteredItems]);
+  }, [monthItems]);
 
   const remainingForecast = useMemo(() => {
-    return filteredItems.reduce((acc, item) => {
+    return monthItems.reduce((acc, item) => {
       if (item.isChecked) return acc;
       const itemPrice = item.referencePrice || item.actualPrice || 0;
       return acc + itemPrice * item.quantity;
     }, 0);
-  }, [filteredItems]);
+  }, [monthItems]);
+
+  const activeCategories = useMemo(() => {
+    const list = shoppingCategories && shoppingCategories.length > 0 ? shoppingCategories : DEFAULT_SHOPPING_CATEGORIES;
+    const itemCats = items.map((i) => i.category || "Outros").filter(Boolean);
+    return Array.from(new Set([...list, ...itemCats]));
+  }, [shoppingCategories, items]);
 
   // Grouped Items
   const groupedItems = useMemo(() => {
     const groups: Record<string, ShoppingItem[]> = {};
-    SHOPPING_CATEGORIES.forEach((cat) => (groups[cat] = []));
+    activeCategories.forEach((cat) => (groups[cat] = []));
 
     filteredItems.forEach((item) => {
       const cat = item.category || "Outros";
@@ -369,7 +417,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
       groups[cat].push(item);
     });
     return groups;
-  }, [filteredItems]);
+  }, [filteredItems, activeCategories]);
 
   // Timeline Data
   const timelineData = useMemo(() => {
@@ -439,7 +487,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
       const nextDate = new Date(parseInt(year), parseInt(month), 1);
       const nextMonthStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}`;
 
-      filteredItems.forEach((item) => {
+      monthItems.forEach((item) => {
         onAdd({
           name: item.name,
           quantity: item.quantity,
@@ -654,7 +702,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
             </div>
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
-              <div className="grid grid-cols-[1fr_100px] gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_110px_90px] gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
                     Nome do Item
@@ -671,6 +719,24 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                    Quantidade
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0.1"
+                    value={editingItem.quantity || 1}
+                    onChange={(e) =>
+                      setEditingItem({
+                        ...editingItem,
+                        quantity: Number(e.target.value) || 1,
+                      })
+                    }
+                    className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-center font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
                     Unid.
                   </label>
                   <select
@@ -678,7 +744,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                     onChange={(e) =>
                       setEditingItem({ ...editingItem, unit: e.target.value })
                     }
-                    className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
                   >
                     <option value="un">UN</option>
                     <option value="kg">KG</option>
@@ -694,25 +760,18 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
-                    Categoria
-                  </label>
-                  <select
-                    value={editingItem.category}
-                    onChange={(e) =>
+                  <CategorySelector
+                    value={editingItem.category || "Outros"}
+                    onChange={(cat) =>
                       setEditingItem({
                         ...editingItem,
-                        category: e.target.value as ShoppingCategory,
+                        category: cat as ShoppingCategory,
                       })
                     }
-                    className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {SHOPPING_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                    categories={activeCategories}
+                    onAddCategory={onAddShoppingCategory}
+                    onDeleteCategory={onDeleteShoppingCategory}
+                  />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
@@ -784,6 +843,52 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                   </div>
                 </div>
               </div>
+
+              {(() => {
+                const refVal = editingItem.referencePrice || 0;
+                const actualVal = editingItem.actualPrice || 0;
+                const qty = Number(editingItem.quantity) || 1;
+                const hasRef = refVal > 0;
+                const hasActual = actualVal > 0;
+
+                if (!hasRef && !hasActual) return null;
+
+                return (
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/80 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                      <Calculator className="w-4 h-4 text-indigo-500" />
+                      <span className="font-semibold">Subtotal calculado:</span>
+                      <span className="font-mono text-[11px] bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-200 font-bold">
+                        {qty} {editingItem.unit || "un"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {hasRef && (
+                        <div className="text-right">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 block leading-tight">
+                            Subtotal Ref. ({qty} × {refVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})
+                          </span>
+                          <span className="text-xs sm:text-sm font-extrabold text-slate-700 dark:text-slate-200 font-mono">
+                            {(qty * refVal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          </span>
+                        </div>
+                      )}
+
+                      {hasActual && (
+                        <div className="text-right pl-3 border-l border-slate-200 dark:border-slate-700">
+                          <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 block leading-tight">
+                            Subtotal Real ({qty} × {actualVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})
+                          </span>
+                          <span className="text-xs sm:text-sm font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
+                            {(qty * actualVal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -908,14 +1013,14 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                   onClearList(monthStr);
                 }
               }}
-              disabled={filteredItems.length === 0}
+              disabled={monthItems.length === 0}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs uppercase tracking-wide transition-all shadow-sm bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900/30 dark:text-rose-300 disabled:opacity-50"
             >
               <Trash2 className="w-4 h-4" /> Limpar Lista
             </button>
             <button
               onClick={handleRepeatNextMonth}
-              disabled={filteredItems.length === 0}
+              disabled={monthItems.length === 0}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs uppercase tracking-wide transition-all shadow-sm bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 disabled:opacity-50"
             >
               <Copy className="w-4 h-4" /> Repetir para Mês que Vem
@@ -1087,6 +1192,20 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                     </div>
                   )}
 
+                  {existingItemInCurrentList && (
+                    <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 text-amber-900 dark:text-amber-200 rounded-xl text-xs font-medium flex items-start gap-2.5 shadow-sm animate-fade-in">
+                      <AlertCircle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="font-bold text-amber-800 dark:text-amber-300">
+                          Atenção: Este item já existe na lista deste mês!
+                        </p>
+                        <p className="text-[11px] text-amber-700/90 dark:text-amber-300/80 mt-0.5">
+                          "{existingItemInCurrentList.name}" já está na lista ({existingItemInCurrentList.quantity} {existingItemInCurrentList.unit || "un"}{existingItemInCurrentList.category ? ` • ${existingItemInCurrentList.category}` : ""}).
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {showSuggestions && (
                     <>
                       <div
@@ -1118,62 +1237,96 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                         ) : (
                           <>
                             {filteredSuggestions.map((p) => (
-                              <button
+                              <div
                                 key={p.id}
-                                type="button"
-                                onClick={() => {
-                                  setNewItemName(p.name);
-                                  setNewItemCategory(p.category);
-                                  setNewItemUnit(p.unit);
-                                  if (
-                                    p.defaultPrice !== undefined &&
-                                    p.defaultPrice > 0
-                                  ) {
-                                    setNewItemRefPrice(
-                                      p.defaultPrice.toLocaleString("pt-BR", {
-                                        minimumFractionDigits: 2,
-                                        maximumFractionDigits: 2,
-                                      }),
-                                    );
-                                  } else {
-                                    setNewItemRefPrice("");
-                                  }
-                                  setProductSearch(p.name);
-                                  setShowSuggestions(false);
-                                }}
-                                className="w-full text-left px-4 py-2.5 hover:bg-slate-100 dark:hover:bg-slate-700/70 flex flex-col transition-colors cursor-pointer"
+                                className="w-full flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors group"
                               >
-                                <span className="font-semibold text-slate-800 dark:text-white text-sm">
-                                  {p.name}
-                                </span>
-                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                  <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 rounded text-[10px] font-bold">
-                                    {p.category}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setNewItemName(p.name);
+                                    setNewItemCategory(p.category);
+                                    setNewItemUnit(p.unit);
+                                    if (
+                                      p.defaultPrice !== undefined &&
+                                      p.defaultPrice > 0
+                                    ) {
+                                      setNewItemRefPrice(
+                                        p.defaultPrice.toLocaleString("pt-BR", {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        }),
+                                      );
+                                    } else {
+                                      setNewItemRefPrice("");
+                                    }
+                                    setProductSearch(p.name);
+                                    setShowSuggestions(false);
+                                  }}
+                                  className="flex-1 text-left px-4 py-2.5 flex flex-col cursor-pointer min-w-0"
+                                >
+                                  <span className="font-semibold text-slate-800 dark:text-white text-sm truncate">
+                                    {p.name}
                                   </span>
-                                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">
-                                    Unidade: {p.unit}
-                                  </span>
-                                  {p.defaultPrice !== undefined &&
-                                    p.defaultPrice > 0 && (
-                                      <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">
-                                        Ref: R${" "}
-                                        {p.defaultPrice.toLocaleString(
-                                          "pt-BR",
-                                          { minimumFractionDigits: 2 },
-                                        )}
-                                      </span>
-                                    )}
-                                  {(() => {
-                                    const stockStatus = getStockStatusForProduct(p.name);
-                                    if (!stockStatus) return null;
-                                    return (
-                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${stockStatus.classes}`}>
-                                        Estoque: {stockStatus.label}
-                                      </span>
-                                    );
-                                  })()}
-                                </div>
-                              </button>
+                                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                    <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 rounded text-[10px] font-bold">
+                                      {p.category}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">
+                                      Unidade: {p.unit}
+                                    </span>
+                                    {p.defaultPrice !== undefined &&
+                                      p.defaultPrice > 0 && (
+                                        <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">
+                                          Ref: R${" "}
+                                          {p.defaultPrice.toLocaleString(
+                                            "pt-BR",
+                                            { minimumFractionDigits: 2 },
+                                          )}
+                                        </span>
+                                      )}
+                                    {(() => {
+                                      const stockStatus = getStockStatusForProduct(p.name);
+                                      if (!stockStatus) return null;
+                                      return (
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${stockStatus.classes}`}>
+                                          Estoque: {stockStatus.label}
+                                        </span>
+                                      );
+                                    })()}
+                                    {(() => {
+                                      const inList = monthItems.find(
+                                        (i) => i.name.trim().toLowerCase() === p.name.trim().toLowerCase()
+                                      );
+                                      if (!inList) return null;
+                                      return (
+                                        <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 rounded text-[9px] font-bold border border-amber-200 dark:border-amber-800/40 flex items-center gap-0.5">
+                                          ⚠️ Já na lista ({inList.quantity} {inList.unit || "un"})
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
+                                </button>
+                                {onDeleteRegisteredProduct && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (
+                                        window.confirm(
+                                          `Deseja excluir o produto "${p.name}" permanentemente do catálogo?`,
+                                        )
+                                      ) {
+                                        onDeleteRegisteredProduct(p.id);
+                                      }
+                                    }}
+                                    className="p-2 mr-3 text-slate-400 hover:text-rose-600 dark:text-slate-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer shrink-0"
+                                    title={`Excluir "${p.name}" do catálogo`}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
                             ))}
                             {productSearch.trim() && !filteredSuggestions.some(p => p.name.toLowerCase() === productSearch.toLowerCase().trim()) && (
                               <button
@@ -1291,24 +1444,67 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                 </div>
               </div>
 
+              {(() => {
+                const refVal = parseCurrencyInput(newItemRefPrice);
+                const actualVal = parseCurrencyInput(newItemPrice);
+                const qty = Number(newItemQuantity) || 1;
+                const hasRef = refVal > 0;
+                const hasActual = actualVal > 0;
+
+                if (!hasRef && !hasActual) return null;
+
+                return (
+                  <div className="p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 flex flex-wrap items-center justify-between gap-2 shadow-2xs transition-all animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                      <div className="w-6 h-6 rounded-lg bg-indigo-600 dark:bg-indigo-500 flex items-center justify-center text-white shrink-0 shadow-xs">
+                        <Calculator className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <span className="font-bold text-indigo-950 dark:text-indigo-200 block text-xs">Subtotal Calculado</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                          Quantidade: <strong className="text-slate-700 dark:text-slate-200 font-mono">{qty} {newItemUnit}</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 ml-auto">
+                      {hasRef && (
+                        <div className="text-right">
+                          <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block leading-tight">
+                            Estimado ({qty} × {refVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})
+                          </span>
+                          <span className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-slate-100 font-mono">
+                            {(qty * refVal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          </span>
+                        </div>
+                      )}
+
+                      {hasActual && (
+                        <div className="text-right pl-3 border-l border-slate-200 dark:border-slate-700/60">
+                          <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 block leading-tight">
+                            Real ({qty} × {actualVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})
+                          </span>
+                          <span className="text-xs sm:text-sm font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
+                            {(qty * actualVal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
-                    Categoria
-                  </label>
-                  <select
+                  <CategorySelector
                     value={newItemCategory}
-                    onChange={(e) =>
-                      setNewItemCategory(e.target.value as ShoppingCategory)
+                    onChange={(cat) =>
+                      setNewItemCategory(cat as ShoppingCategory)
                     }
-                    className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm text-sm"
-                  >
-                    {SHOPPING_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                    categories={activeCategories}
+                    onAddCategory={onAddShoppingCategory}
+                    onDeleteCategory={onDeleteShoppingCategory}
+                  />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
@@ -1401,13 +1597,55 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
         </div>
       )}
 
+      {/* Search Bar - Above "Ir para" */}
+      {monthItems.length > 0 && activeTab === "list" && (
+        <div className="mb-4">
+          <div className="relative flex items-center">
+            <Search className="w-4 h-4 absolute left-3.5 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              placeholder="Buscar produto na lista..."
+              className="w-full pl-10 pr-10 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm transition-all"
+            />
+            {searchFilter && (
+              <button
+                type="button"
+                onClick={() => setSearchFilter("")}
+                className="absolute right-3 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                title="Limpar busca"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          {searchFilter.trim() && (
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-1.5 px-1">
+              <span>
+                {filteredItems.length === 1
+                  ? "1 produto encontrado"
+                  : `${filteredItems.length} produtos encontrados`}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSearchFilter("")}
+                className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+              >
+                Limpar filtro
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Categoria Anchors */}
       {activeTab === "list" && filteredItems.length > 0 && (
         <div className="flex overflow-x-auto no-scrollbar gap-2 mb-4 bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm sticky top-[72px] z-20">
           <span className="text-xs font-bold text-slate-500 uppercase flex items-center pr-2 border-r border-slate-200 dark:border-slate-700">
             Ir para
           </span>
-          {SHOPPING_CATEGORIES.filter((c) => groupedItems[c]?.length > 0).map(
+          {activeCategories.filter((c) => groupedItems[c]?.length > 0).map(
             (cat) => (
               <button
                 key={cat}
@@ -1428,20 +1666,39 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
       {/* LIST (GROUPED BY CATEGORY) OR TIMELINE */}
       <div className="space-y-6">
         {filteredItems.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 flex flex-col items-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-            <ShoppingCart className="w-16 h-16 mb-4 opacity-20" />
-            <p className="font-medium text-slate-800 dark:text-white">
-              Sua lista para {formatMonth(currentDate)} está vazia.
-            </p>
-            {hasApiKey && (
-              <p
-                className="text-sm mt-2 text-purple-500 cursor-pointer hover:underline"
-                onClick={() => setIsAiModalOpen(true)}
-              >
-                Experimente usar a IA para criar uma lista!
+          searchFilter.trim() ? (
+            <div className="p-12 text-center text-slate-400 flex flex-col items-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+              <Search className="w-12 h-12 mb-3 text-slate-300 dark:text-slate-600 opacity-40" />
+              <p className="font-bold text-slate-700 dark:text-white">
+                Nenhum produto encontrado para "{searchFilter}"
               </p>
-            )}
-          </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Verifique a ortografia ou tente buscar por outro termo.
+              </p>
+              <button
+                type="button"
+                onClick={() => setSearchFilter("")}
+                className="mt-4 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+              >
+                Limpar busca
+              </button>
+            </div>
+          ) : (
+            <div className="p-12 text-center text-slate-400 flex flex-col items-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+              <ShoppingCart className="w-16 h-16 mb-4 opacity-20" />
+              <p className="font-medium text-slate-800 dark:text-white">
+                Sua lista para {formatMonth(currentDate)} está vazia.
+              </p>
+              {hasApiKey && (
+                <p
+                  className="text-sm mt-2 text-purple-500 cursor-pointer hover:underline"
+                  onClick={() => setIsAiModalOpen(true)}
+                >
+                  Experimente usar a IA para criar uma lista!
+                </p>
+              )}
+            </div>
+          )
         ) : activeTab === "timeline" ? (
           <div className="space-y-4">
             {timelineData.length === 0 ? (
@@ -1624,7 +1881,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
             )}
           </div>
         ) : (
-          SHOPPING_CATEGORIES.map((category) => {
+          activeCategories.map((category) => {
             const categoryItems = groupedItems[category];
             if (!categoryItems || categoryItems.length === 0) return null;
 
@@ -2015,22 +2272,16 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 ml-1">
-                    Categoria
-                  </label>
-                  <select
+                  <CategorySelector
                     value={stockItemCategory}
-                    onChange={(e) =>
-                      setStockItemCategory(e.target.value as ShoppingCategory)
+                    onChange={(cat) =>
+                      setStockItemCategory(cat as ShoppingCategory)
                     }
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {SHOPPING_CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
+                    categories={activeCategories}
+                    onAddCategory={onAddShoppingCategory}
+                    onDeleteCategory={onDeleteShoppingCategory}
+                    compact
+                  />
                 </div>
 
                 <div>

@@ -48,6 +48,7 @@ import {
   Coins,
   TrendingUp,
   Snowflake,
+  Rocket,
 } from "lucide-react";
 import { View } from "../types";
 import { useFocus } from "../contexts/FocusContext";
@@ -185,6 +186,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isInvestimentosActive = [
     View.INVESTMENTS_DASHBOARD,
     View.INVESTMENTS,
+    View.STOCKS_GROWTH,
     View.SNOWBALL,
     View.FINANCIAL_CHALLENGES,
     View.WEALTH_PLANNER,
@@ -418,6 +420,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <TrendingUp className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
                 <span>Meus Investimentos</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.STOCKS_GROWTH)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.STOCKS_GROWTH
+                    ? "bg-teal-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Rocket className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
+                <span>Motor de Crescimento</span>
               </button>
 
               <button

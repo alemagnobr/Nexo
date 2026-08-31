@@ -25,6 +25,7 @@ import {
 import { CurrencyInput } from './CurrencyInput';
 import { SnowballAIAdvisor } from './SnowballAIAdvisor';
 import { SnowballAssetReevaluationModal } from './SnowballAssetReevaluationModal';
+import { SnowballGrowthChartModal } from './SnowballGrowthChartModal';
 import { fetchB3Quote, CURATED_FII_DATA, B3QuoteResult } from '../services/brapiService';
 
 interface SnowballViewProps {
@@ -66,6 +67,7 @@ export const SnowballView: React.FC<SnowballViewProps> = ({
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [isFetchingLiveQuote, setIsFetchingLiveQuote] = useState(false);
   const [reevaluatingAsset, setReevaluatingAsset] = useState<Investment | null>(null);
+  const [growthChartAsset, setGrowthChartAsset] = useState<Investment | null>(null);
 
   // Quick Share increment modal
   const [quickShareAsset, setQuickShareAsset] = useState<Investment | null>(null);
@@ -750,7 +752,15 @@ export const SnowballView: React.FC<SnowballViewProps> = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1 sm:gap-1.5">
+                        <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+                          <button
+                            onClick={() => setGrowthChartAsset(asset)}
+                            title="Visualizar gráfico de crescimento e efeito Bola de Neve"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border border-cyan-200/80 dark:border-cyan-800/60 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 hover:border-cyan-400 transition-all shadow-xs cursor-pointer"
+                          >
+                            <TrendingUp className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                            <span>Gráfico</span>
+                          </button>
                           <button
                             onClick={() => setReevaluatingAsset(asset)}
                             title="Reavaliar tese deste ativo com IA (Segurança, Rentabilidade, Estabilidade e Gatilhos)"
@@ -1711,6 +1721,19 @@ export const SnowballView: React.FC<SnowballViewProps> = ({
             setSharesToAdd(qty);
           }}
           onUpdateAssetQuote={handleUpdateAssetQuote}
+        />
+      )}
+
+      {/* MODAL: SNOWBALL GROWTH CHART */}
+      {growthChartAsset && (
+        <SnowballGrowthChartModal
+          asset={growthChartAsset}
+          isOpen={!!growthChartAsset}
+          onClose={() => setGrowthChartAsset(null)}
+          onQuickAddShares={(assetToAport, qty) => {
+            setQuickShareAsset(assetToAport);
+            setSharesToAdd(qty);
+          }}
         />
       )}
     </div>

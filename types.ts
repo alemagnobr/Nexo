@@ -442,6 +442,7 @@ export enum View {
   DAILY_ROUTINES = 'DAILY_ROUTINES',
   WORK_GOALS = 'WORK_GOALS',
   TREINO = 'TREINO',
+  STOCKS_GROWTH = 'STOCKS_GROWTH', // Motor de Crescimento (Ações B3)
   WALLETS = 'WALLETS', // Gerenciamento de Carteiras
   SETTINGS = 'SETTINGS',
   INVENTORY = 'INVENTORY'
@@ -597,3 +598,202 @@ export interface WorkGoal {
   status?: 'active' | 'completed';
   createdAt: string;
 }
+
+// ==========================================
+// 🚀 MOTOR DE CRESCIMENTO (AÇÕES) TYPES
+// ==========================================
+
+export type StockClassification = 'QUALITY_COMPOUNDER' | 'GROWTH';
+export type StockSemaphore = 'APORTAR' | 'AGUARDAR' | 'REAVALIAR' | 'TESE_DETERIORADA';
+export type StockRiskLevel = 'BAIXO' | 'MODERADO' | 'ELEVADO' | 'CRITICO';
+export type StockDataConfidence = 'ALTA' | 'MEDIA' | 'NAO_CONFIRMADO';
+export type StockReevaluationStatus = 'TESE_MANTIDA' | 'ATENCAO' | 'TESE_ENFRAQUECIDA' | 'MUDANCA_ESTRUTURAL';
+
+export interface StockPillarDetail {
+  score: number; // e.g. 24
+  max: number;   // e.g. 25
+  label: string; // "Crescimento"
+  metrics: string[]; // ["CAGR Receita 5A: +18.4%", "CAGR Lucro 5A: +21.2%"]
+  justification: string;
+}
+
+export interface StockGrowthPillars {
+  growth: StockPillarDetail;           // Peso 25
+  profitability: StockPillarDetail;    // Peso 20
+  financialHealth: StockPillarDetail;  // Peso 20
+  cashGeneration: StockPillarDetail;   // Peso 15
+  valuation: StockPillarDetail;        // Peso 10
+  qualityResilience: StockPillarDetail;// Peso 10
+}
+
+export interface StockTrigger {
+  id: string;
+  condition: string;
+  status: 'NORMAL' | 'ATENCAO' | 'VIOLADO';
+  motive: string;
+  recommendedAnalysis: string;
+}
+
+export interface StockSpecificRisk {
+  id: string;
+  name: string;
+  level: StockRiskLevel;
+  description: string;
+  mitigation: string;
+}
+
+export interface StockAsset {
+  ticker: string;
+  name: string;
+  sector: string;
+  subsector?: string;
+  currentPrice: number;
+  changePercent?: number;
+  classification: StockClassification;
+  growthScore: number; // 0 - 100
+  semaphore: StockSemaphore;
+  riskLevel: StockRiskLevel;
+  valuationStatus: 'Muito Atrativo' | 'Atrativo' | 'Neutro / Justo' | 'Esticado / Caro' | 'Excessivamente Caro';
+  growthPace: 'Muito Forte' | 'Forte' | 'Moderado' | 'Em Aceleração' | 'Estável';
+  qualityRating: 'Excepcional' | 'Excelente' | 'Boa' | 'Em Observação';
+  
+  // Fundamentals
+  revenueCagr5y: number; // %
+  revenueCagr3y: number; // %
+  profitCagr5y: number;  // %
+  profitCagr3y: number;  // %
+  ebitdaCagr3y: number;  // %
+  roic: number;          // %
+  roe: number;           // %
+  netMargin: number;     // %
+  grossMargin: number;   // %
+  operatingMargin: number; // %
+  netDebtToEbitda: number; // x
+  interestCoverage: number; // x
+  cashPosition: string;  // e.g. "R$ 6.2 bi (Caixa Líquido)"
+  fcfYield: number;      // %
+  fcfConversion: number; // % (FCF / Lucro Líquido)
+  fcfConsistency: string;// e.g. "Positivo e crescente nos últimos 5 anos"
+  
+  // Valuation metrics
+  peRatio: number;       // P/L
+  historicalAvgPe: number; // P/L Médio 5 anos
+  evEbitda: number;      // EV/EBITDA
+  pegRatio: number;      // PEG
+  pToFcf: number;        // P/FCF
+  fairPriceEstimated?: number;
+  safetyMarginPercent?: number;
+
+  // Resilience & Moat
+  moat: string;
+  pricingPower: string;
+  governanceLevel: string; // Novo Mercado / B3
+  crisisHistory: string;
+
+  // Breakdown & Analysis
+  pillars: StockGrowthPillars;
+  analystVerdict: string;
+  asymmetryReason?: string; // Motivo de vitória na assimetria
+  keyStrengths: string[];
+  keyRisks: StockSpecificRisk[];
+  triggers: StockTrigger[];
+
+  // Trust & Metadata
+  dataConfidence: StockDataConfidence;
+  dataSource: string;
+  lastAuditDate: string;
+  isRealTimeQuote?: boolean;
+}
+
+export interface StockSnapshot {
+  id: string;
+  ticker: string;
+  date: string;
+  price: number;
+  growthScore: number;
+  revenueCagr5y: number;
+  profitCagr5y: number;
+  roic: number;
+  roe: number;
+  netMargin: number;
+  netDebtToEbitda: number;
+  fcfYield: number;
+  peRatio: number;
+  semaphore: StockSemaphore;
+  analystTake: string;
+  thesisStatus: StockReevaluationStatus;
+}
+
+export interface StockContribution {
+  id: string;
+  date: string;
+  ticker: string;
+  sharesCount: number;
+  pricePurchased: number;
+  totalAmount: number;
+  growthScoreAtPurchase: number;
+  semaphoreAtPurchase: StockSemaphore;
+  notes?: string;
+}
+
+export interface StockReevaluationAudit {
+  id: string;
+  ticker: string;
+  auditDate: string;
+  previousSnapshot: StockSnapshot;
+  currentData: StockAsset;
+  whatChanged: string[];
+  impactLevel: 'BAIXO' | 'MEDIO' | 'ALTO' | 'CRITICO';
+  status: StockReevaluationStatus;
+  newGrowthScore: number;
+  analystConclusion: string;
+}
+
+export interface StockAIEvaluationAssetRank {
+  ticker: string;
+  name: string;
+  sector: string;
+  currentPrice: number;
+  aiGrowthScore: number; // 0-100
+  semaphore: StockSemaphore; // APORTAR | AGUARDAR | REAVALIAR | TESE_DETERIORADA
+  riskLevel: StockRiskLevel;
+  asymmetryRank: number; // 1, 2, 3...
+  asymmetryScore: number; // 0-100
+  valuationStatus: string;
+  fairPriceEstimated?: number;
+  safetyMarginPercent?: number;
+  highlightRationale: string;
+  growthDriver: string;
+  mainRiskAlert: string;
+}
+
+export interface StockAIEvaluationReport {
+  id: string;
+  analyzedAt: string;
+  aporteConsidered: number;
+  macroContext: {
+    interestRateScenario: string;
+    sectorOutlook: string;
+    summaryVerdict: string;
+  };
+  topPick: {
+    ticker: string;
+    name: string;
+    sector: string;
+    currentPrice: number;
+    fairPriceEstimated: number;
+    safetyMarginPercent: number;
+    growthScore: number;
+    semaphore: StockSemaphore;
+    whyTopPick: string;
+    recommendedAllocationPercent: number;
+    targetSharesForAporte?: number;
+  };
+  rankedAssets: StockAIEvaluationAssetRank[];
+  tacticalAdvice: string[];
+  riskAlerts: string[];
+  sources?: { title: string; uri: string }[];
+  isCustomAI?: boolean;
+}
+
+

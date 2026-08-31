@@ -452,11 +452,12 @@ const App: React.FC = () => {
       );
     }
 
-    // 2.5. Group: Investimentos (Meus Investimentos, Bola de Neve, Desafios Financeiros, Aposentadoria)
+    // 2.5. Group: Investimentos (Meus Investimentos, Motor de Crescimento, Bola de Neve, Desafios Financeiros, Aposentadoria)
     if (
       [
         View.INVESTMENTS_DASHBOARD,
         View.INVESTMENTS,
+        View.STOCKS_GROWTH,
         View.SNOWBALL,
         View.FINANCIAL_CHALLENGES,
         View.WEALTH_PLANNER

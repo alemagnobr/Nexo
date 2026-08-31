@@ -562,9 +562,14 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
 
     const newStatus: TransactionStatus =
       targetTransaction.status === "paid" ? "pending" : "paid";
-    const finalWalletId = walletId || targetTransaction.walletId;
+    
+    let finalWalletId = walletId || targetTransaction.walletId;
+    const isNone = finalWalletId === 'none';
+    if (isNone) {
+      finalWalletId = undefined;
+    }
 
-    if (newStatus === "paid" && targetTransaction.type === "expense" && finalWalletId) {
+    if (newStatus === "paid" && targetTransaction.type === "expense" && finalWalletId && !isNone) {
       const wallet = data.wallets?.find((w) => w.id === finalWalletId);
       if (wallet && Number(targetTransaction.amount) > wallet.balance + 0.001) {
         const fmtAvail = wallet.balance.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });

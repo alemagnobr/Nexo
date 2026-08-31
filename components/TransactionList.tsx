@@ -891,7 +891,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
 
   const handleConfirmCompletion = () => {
     if (completingTransaction && completionWalletId) {
-      if (completingTransaction.type === 'expense') {
+      if (completingTransaction.type === 'expense' && completionWalletId !== 'none') {
         const wallet = wallets?.find(w => w.id === completionWalletId);
         if (wallet && completingTransaction.amount > wallet.balance + 0.001) {
           alert(`Transação não permitida: A conta ou cartão "${wallet.name}" não possui margem/saldo suficiente.\n\nDisponível: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(wallet.balance)}\nValor da transação: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(completingTransaction.amount)}`);
@@ -932,6 +932,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
               className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl p-3 outline-none focus:border-indigo-500 transition-colors mb-6"
             >
               <option value="">Selecione a Conta...</option>
+              <option value="none">Nenhuma (Apenas concluir sem debitar)</option>
               {wallets.map(w => (
                 <option key={w.id} value={w.id}>{w.name} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(w.balance)})</option>
               ))}

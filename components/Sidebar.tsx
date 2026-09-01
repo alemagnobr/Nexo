@@ -49,6 +49,7 @@ import {
   TrendingUp,
   Snowflake,
   Rocket,
+  Trophy,
 } from "lucide-react";
 import { View } from "../types";
 import { useFocus } from "../contexts/FocusContext";
@@ -190,6 +191,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     View.SNOWBALL,
     View.FINANCIAL_CHALLENGES,
     View.WEALTH_PLANNER,
+    View.MERCADO_ESPORTIVO,
   ].includes(currentView);
   
   const isComprasActive = [
@@ -468,6 +470,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <Landmark className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
                 <span>Aposentadoria</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(View.MERCADO_ESPORTIVO)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentView === View.MERCADO_ESPORTIVO
+                    ? "bg-teal-600 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Trophy className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                <span>Mercado Esportivo</span>
               </button>
             </div>
           )}

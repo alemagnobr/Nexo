@@ -415,6 +415,7 @@ export interface AppData {
   workoutSteps?: WorkoutStep[];
   workoutCheckins?: WorkoutCheckin[];
   workoutRoutines?: WorkoutRoutine[];
+  sportsBettingData?: SportsBettingData;
 }
 
 export enum View {
@@ -425,6 +426,8 @@ export enum View {
   SAUDE_DASHBOARD = 'SAUDE_DASHBOARD',
   TRANSACTIONS = 'TRANSACTIONS',
   INVESTMENTS = 'INVESTMENTS',
+  STOCKS_GROWTH = 'STOCKS_GROWTH', // Motor de Crescimento (Ações B3)
+  MERCADO_ESPORTIVO = 'MERCADO_ESPORTIVO', // Gestão de Risco & Juros Compostos (Mercado Esportivo)
   SNOWBALL = 'SNOWBALL',
   FINANCIAL_CHALLENGES = 'FINANCIAL_CHALLENGES',
   BUDGETS = 'BUDGETS',
@@ -442,7 +445,6 @@ export enum View {
   DAILY_ROUTINES = 'DAILY_ROUTINES',
   WORK_GOALS = 'WORK_GOALS',
   TREINO = 'TREINO',
-  STOCKS_GROWTH = 'STOCKS_GROWTH', // Motor de Crescimento (Ações B3)
   WALLETS = 'WALLETS', // Gerenciamento de Carteiras
   SETTINGS = 'SETTINGS',
   INVENTORY = 'INVENTORY'
@@ -796,4 +798,84 @@ export interface StockAIEvaluationReport {
   isCustomAI?: boolean;
 }
 
+// ==========================================
+// MERCADO ESPORTIVO: GESTÃO DE RISCO & JUROS COMPOSTOS
+// ==========================================
+
+export type SportsBetStatus = 'WIN' | 'LOSS' | 'VOID' | 'HALF_WIN' | 'HALF_LOSS' | 'PENDING';
+
+export interface SportsBettingConfig {
+  initialBankroll: number; // Capital Inicial (R$)
+  currentBankroll: number; // Banca Ativa Atual (R$)
+  protectedVault: number; // Cofre de Proteção / Reserva Segura Acumulada (R$)
+  stakePercentage: number; // Exposição por Entrada (% da banca atual, ex: 2%, 3%, 5%)
+  compoundPercentage: number; // % do Lucro líquido reinvestido na banca ativa (Juros Compostos, ex: 70%)
+  protectionPercentage: number; // % do Lucro líquido travado e guardado no cofre de proteção (ex: 30%)
+  protectionInvestmentId?: string; // ID do investimento de destino (Caixinha, Ação, FII) onde a proteção será investida
+  minimumStake?: number; // Valor mínimo por entrada (R$, opcional)
+  stopLossDaily?: number; // Limite de perda diária opcional
+  stopGainDaily?: number; // Limite de ganho diário opcional
+  strategyName?: string; // Nome da estratégia / Gestão de Banca
+  notes?: string;
+  updatedAt?: string;
+}
+
+export interface SportsBetOperation {
+  id: string;
+  date: string; // ISO date string ou YYYY-MM-DD
+  time?: string; // HH:mm
+  event: string; // Ex: Real Madrid vs Barcelona
+  sport: string; // Futebol, Basquete, Tênis, E-Sports, Vôlei, Outros
+  competition?: string; // Ex: Premier League, Champions League, NBA, Brasileirão
+  market: string; // Ex: Over 2.5 Gols, Match Odds (1X2), Ambas Marcam, Handicap Asiático -0.5
+  odds: number; // Cotação (ex: 1.85)
+  stake: number; // Valor da entrada (R$)
+  stakePercentageUsed?: number; // % da banca na época da entrada
+  status: SportsBetStatus; // WIN, LOSS, VOID, HALF_WIN, HALF_LOSS, PENDING
+  netProfit: number; // Lucro líquido em R$ (positivo para win, negativo para loss, zero para void)
+  grossReturn?: number; // Retorno bruto total
+  compoundAmount: number; // Valor destinado aos juros compostos (adicionado à banca ativa)
+  protectedAmount: number; // Valor destinado à proteção de risco (guardado no cofre)
+  bankrollBefore?: number; // Banca ativa antes da operação
+  bankrollAfter: number; // Banca ativa após o resultado
+  vaultAfter: number; // Saldo do cofre de proteção após o resultado
+  notes?: string;
+}
+
+export interface SportsBettingVaultTransfer {
+  id: string;
+  date: string;
+  type: 'WITHDRAWAL' | 'REINJECT_TO_BANKROLL';
+  amount: number;
+  notes?: string;
+}
+
+export type SportsBettingProjectStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'ARCHIVED';
+
+export interface SportsBettingProject {
+  id: string;
+  name: string;
+  description?: string;
+  bookmaker?: string; // ex: Bet365, Betano, Pinnacle, Betfair, Stake, etc.
+  sportFocus?: string; // ex: Futebol, Basquete, E-Sports, Multi-esportes
+  targetGoal?: number; // Meta de banca ou lucro em R$ (opcional)
+  color?: string; // emerald, blue, indigo, violet, amber, rose, cyan
+  status: SportsBettingProjectStatus;
+  config: SportsBettingConfig;
+  operations: SportsBetOperation[];
+  vaultTransfers?: SportsBettingVaultTransfer[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SportsBettingMultiProjectData {
+  activeProjectId: string | null;
+  projects: SportsBettingProject[];
+}
+
+export interface SportsBettingData {
+  config: SportsBettingConfig;
+  operations: SportsBetOperation[];
+  vaultTransfers?: SportsBettingVaultTransfer[];
+}
 

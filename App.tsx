@@ -14,7 +14,8 @@ import {
   CheckSquare,
   Activity,
   LayoutDashboard,
-  LineChart
+  LineChart,
+  ArrowUp
 } from "lucide-react";
 import {
   View,
@@ -116,8 +117,10 @@ const App: React.FC = () => {
   });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
 
-  // Synchronize currentView with localStorage & URL hash
+  // Synchronize currentView with localStorage & URL hash, and scroll to top
   useEffect(() => {
     try {
       localStorage.setItem("nexo_current_view", currentView);
@@ -125,10 +128,25 @@ const App: React.FC = () => {
       if (window.location.hash !== targetHash) {
         window.history.replaceState(null, "", targetHash);
       }
+      if (mainRef.current) {
+        mainRef.current.scrollTo({ top: 0, behavior: "smooth" });
+      }
     } catch (e) {
       console.error("Error persisting current view:", e);
     }
   }, [currentView]);
+
+  const handleMainScroll = () => {
+    if (mainRef.current) {
+      setShowScrollTop(mainRef.current.scrollTop > 280);
+    }
+  };
+
+  const scrollToTop = () => {
+    if (mainRef.current) {
+      mainRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   // Listen to browser navigation (back/forward or hash change)
   useEffect(() => {
@@ -460,7 +478,8 @@ const App: React.FC = () => {
         View.STOCKS_GROWTH,
         View.SNOWBALL,
         View.FINANCIAL_CHALLENGES,
-        View.WEALTH_PLANNER
+        View.WEALTH_PLANNER,
+        View.MERCADO_ESPORTIVO,
       ].includes(currentView)
     ) {
       return (
@@ -619,7 +638,11 @@ const App: React.FC = () => {
         onSetDriveLink={actions.setDriveLink}
       />
 
-      <main className="flex-1 p-4 md:p-8 pt-20 md:pt-8 pb-8 overflow-y-auto h-screen scroll-smooth">
+      <main
+        ref={mainRef}
+        onScroll={handleMainScroll}
+        className="flex-1 p-4 md:p-8 pt-20 md:pt-8 pb-8 overflow-y-auto h-screen scroll-smooth relative"
+      >
         <div className="md:hidden fixed top-0 left-0 right-0 bg-slate-900 p-4 border-b border-slate-800 z-30 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-3">
             <button
@@ -735,6 +758,18 @@ const App: React.FC = () => {
 
           {renderContent()}
         </div>
+
+        {/* Botão Flutuante de Voltar ao Topo */}
+        {showScrollTop && (
+          <button
+            onClick={scrollToTop}
+            className="fixed bottom-6 right-6 z-40 p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-lg shadow-indigo-600/30 transition-all duration-300 transform hover:scale-110 active:scale-95 flex items-center justify-center border border-indigo-400/30 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            title="Voltar ao topo da tela"
+            aria-label="Voltar ao topo"
+          >
+            <ArrowUp className="w-5 h-5 animate-bounce" />
+          </button>
+        )}
       </main>
 
       <FocusTimerModal />

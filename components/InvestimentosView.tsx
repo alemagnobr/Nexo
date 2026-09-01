@@ -5,7 +5,9 @@ import { SnowballView } from './SnowballView';
 import { FinancialChallengeView } from './FinancialChallengeView';
 import { RetirementMachine } from './RetirementMachine';
 import { StocksGrowthView } from './StocksGrowthView';
-import { LineChart, Coins, Landmark, TrendingUp, Trophy, ArrowRight, DollarSign, Target, Snowflake, Zap, Rocket } from 'lucide-react';
+import { MercadoEsportivoView } from './MercadoEsportivoView';
+import { getSportsProjectsData, getGlobalSportsStats } from '../services/sportsBettingService';
+import { LineChart, Coins, Landmark, TrendingUp, Trophy, ArrowRight, DollarSign, Target, Snowflake, Zap, Rocket, ShieldCheck } from 'lucide-react';
 
 interface InvestimentosViewProps {
   currentView: View;
@@ -67,6 +69,14 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
       iconBg: 'bg-purple-100/90 dark:bg-purple-950/80',
       activeBorder: 'border-purple-500/30 text-purple-700 dark:text-purple-300',
     },
+    {
+      id: View.MERCADO_ESPORTIVO,
+      label: 'Mercado Esportivo',
+      icon: Trophy,
+      iconColor: 'text-emerald-500 dark:text-emerald-400',
+      iconBg: 'bg-emerald-100/90 dark:bg-emerald-950/80',
+      activeBorder: 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300',
+    },
   ];
 
   // Calculate summary metrics for overview
@@ -85,6 +95,25 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
     inv.type?.toLowerCase().includes('fiagro') ||
     inv.sharesCount !== undefined
   ).length;
+
+  // Sports betting quick state
+  const sportsProjectsData = React.useMemo(() => {
+    try {
+      return getSportsProjectsData();
+    } catch {
+      return null;
+    }
+  }, [currentView]);
+
+  const sportsGlobalStats = React.useMemo(() => {
+    if (!sportsProjectsData?.projects) return null;
+    return getGlobalSportsStats(sportsProjectsData.projects);
+  }, [sportsProjectsData]);
+
+  const sportsBankroll = sportsGlobalStats?.totalBankrolls ?? 1000;
+  const sportsTotalEquity = sportsGlobalStats?.totalEquity ?? 1000;
+  const sportsProjectsCount = sportsGlobalStats?.activeProjectsCount ?? 1;
+  const sportsOpsCount = sportsGlobalStats?.totalOperations ?? 0;
 
   return (
     <div className="space-y-6">
@@ -125,12 +154,12 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
                   Hub de Investimentos & Futuro
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Gerencie sua carteira, execute a estratégia Bola de Neve (FIIs), desafios de economia e planeje sua aposentadoria.
+                  Gerencie sua carteira, ações de crescimento, estratégia Bola de Neve (FIIs), desafios de economia, mercado esportivo com blindagem e planeje sua aposentadoria.
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Card 1: Meus Investimentos */}
               <div
                 className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between gap-4 cursor-pointer hover:border-emerald-400 hover:shadow-md transition-all group"
@@ -166,7 +195,42 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
                 </div>
               </div>
 
-              {/* Card 2: Bola de Neve */}
+              {/* Card 2: Motor de Crescimento (Ações) */}
+              <div
+                className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-indigo-200 dark:border-indigo-800/80 shadow-sm flex flex-col justify-between gap-4 cursor-pointer hover:border-indigo-400 hover:shadow-md transition-all group relative overflow-hidden"
+                onClick={() => onNavigate(View.STOCKS_GROWTH)}
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="p-3 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                      <Rocket className="w-6 h-6 animate-bounce" />
+                    </div>
+                    <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-full border border-indigo-200/60 dark:border-indigo-800/60">
+                      🚀 Motor de Crescimento
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                    Ações de Crescimento & Qualidade
+                  </h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
+                    Growth Score de 0 a 100, assimetria Top 1, ROIC, geração de caixa e reavaliação de teses na B3.
+                  </p>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Estratégia</span>
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                      Quality Compounders
+                    </span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                    <ArrowRight className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Bola de Neve */}
               <div
                 className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between gap-4 cursor-pointer hover:border-cyan-400 hover:shadow-md transition-all group"
                 onClick={() => onNavigate(View.SNOWBALL)}
@@ -201,7 +265,7 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
                 </div>
               </div>
 
-              {/* Card 3: Desafios Financeiros */}
+              {/* Card 4: Desafios Financeiros */}
               <div
                 className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between gap-4 cursor-pointer hover:border-amber-400 hover:shadow-md transition-all group"
                 onClick={() => onNavigate(View.FINANCIAL_CHALLENGES)}
@@ -236,7 +300,7 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
                 </div>
               </div>
 
-              {/* Card 4: Aposentadoria */}
+              {/* Card 5: Aposentadoria */}
               <div
                 className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between gap-4 cursor-pointer hover:border-purple-400 hover:shadow-md transition-all group"
                 onClick={() => onNavigate(View.WEALTH_PLANNER)}
@@ -271,36 +335,37 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
                 </div>
               </div>
 
-              {/* Card 5: Motor de Crescimento (Ações) */}
+              {/* Card 6: Mercado Esportivo */}
               <div
-                className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-indigo-200 dark:border-indigo-800/80 shadow-sm flex flex-col justify-between gap-4 cursor-pointer hover:border-indigo-400 hover:shadow-md transition-all group relative overflow-hidden"
-                onClick={() => onNavigate(View.STOCKS_GROWTH)}
+                className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-emerald-200 dark:border-emerald-800/80 shadow-sm flex flex-col justify-between gap-4 cursor-pointer hover:border-emerald-400 hover:shadow-md transition-all group relative overflow-hidden"
+                onClick={() => onNavigate(View.MERCADO_ESPORTIVO)}
               >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="p-3 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-xl">
-                      <Rocket className="w-6 h-6 animate-bounce" />
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                      <Trophy className="w-6 h-6" />
                     </div>
-                    <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-full border border-indigo-200/60 dark:border-indigo-800/60">
-                      🚀 Motor de Crescimento
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-200/60 dark:border-emerald-800/60 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3" />
+                      {sportsProjectsCount} {sportsProjectsCount === 1 ? 'projeto' : 'projetos'} • {sportsOpsCount} ops
                     </span>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                    Ações de Crescimento & Qualidade
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                    Mercado Esportivo & Projetos
                   </h3>
                   <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
-                    Growth Score de 0 a 100, assimetria Top 1, ROIC, geração de caixa e reavaliação de teses na B3.
+                    Crie múltiplos projetos simultâneos com gestão de risco, juros compostos calculados e cofre de proteção blindado.
                   </p>
                 </div>
 
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
                   <div>
-                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Estratégia</span>
-                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                      Quality Compounders
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Total em Bancas</span>
+                    <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                      {privacyMode ? '••••••' : `R$ ${sportsBankroll.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                     </span>
                   </div>
-                  <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                  <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-300 group-hover:bg-emerald-600 group-hover:text-white transition-all">
                     <ArrowRight className="w-4 h-4" />
                   </div>
                 </div>
@@ -367,6 +432,16 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
             onNavigateToInvestments={() => onNavigate(View.INVESTMENTS)}
             privacyMode={privacyMode}
             hasApiKey={hasApiKey}
+          />
+        )}
+
+        {currentView === View.MERCADO_ESPORTIVO && (
+          <MercadoEsportivoView
+            privacyMode={privacyMode}
+            onNavigate={onNavigate}
+            investments={data.investments || []}
+            onAddTransaction={actions.addTransaction}
+            onUpdateInvestment={actions.updateInvestment}
           />
         )}
       </div>

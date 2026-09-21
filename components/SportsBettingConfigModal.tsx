@@ -37,6 +37,9 @@ export const SportsBettingConfigModal: React.FC<SportsBettingConfigModalProps> =
   const [compoundPercentage, setCompoundPercentage] = useState(String(config.compoundPercentage));
   const [protectionPercentage, setProtectionPercentage] = useState(String(config.protectionPercentage));
   const [protectionInvestmentId, setProtectionInvestmentId] = useState(config.protectionInvestmentId || '');
+  const [stopLossPercentage, setStopLossPercentage] = useState(config.stopLossPercentage ? String(config.stopLossPercentage) : '');
+  const [stopLossDaily, setStopLossDaily] = useState(config.stopLossDaily ? String(config.stopLossDaily) : '');
+  const [stopGainDaily, setStopGainDaily] = useState(config.stopGainDaily ? String(config.stopGainDaily) : '');
   const [strategyName, setStrategyName] = useState(config.strategyName || '');
   const [notes, setNotes] = useState(config.notes || '');
   const [reapplyToHistory, setReapplyToHistory] = useState(false);
@@ -53,6 +56,9 @@ export const SportsBettingConfigModal: React.FC<SportsBettingConfigModalProps> =
       setCompoundPercentage(String(config.compoundPercentage));
       setProtectionPercentage(String(config.protectionPercentage));
       setProtectionInvestmentId(config.protectionInvestmentId || '');
+      setStopLossPercentage(config.stopLossPercentage ? String(config.stopLossPercentage) : '');
+      setStopLossDaily(config.stopLossDaily ? String(config.stopLossDaily) : '');
+      setStopGainDaily(config.stopGainDaily ? String(config.stopGainDaily) : '');
       setStrategyName(config.strategyName || '');
       setNotes(config.notes || '');
       setReapplyToHistory(false);
@@ -94,6 +100,8 @@ export const SportsBettingConfigModal: React.FC<SportsBettingConfigModalProps> =
       return;
     }
 
+    const numStopLossPct = stopLossPercentage ? (parseFloat(stopLossPercentage.replace(',', '.')) || undefined) : undefined;
+
     onSaveConfig(
       {
         initialBankroll: numInitial,
@@ -101,6 +109,7 @@ export const SportsBettingConfigModal: React.FC<SportsBettingConfigModalProps> =
         compoundPercentage: numCompPct,
         protectionPercentage: numProtPct,
         protectionInvestmentId: protectionInvestmentId || undefined,
+        stopLossPercentage: numStopLossPct,
         minimumStake: 0,
         strategyName: strategyName.trim() || undefined,
         notes: notes.trim() || undefined,
@@ -308,6 +317,32 @@ export const SportsBettingConfigModal: React.FC<SportsBettingConfigModalProps> =
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Trailing Stop Loss Dinâmico */}
+            <div className="p-4 bg-slate-950/40 border border-slate-800 rounded-xl space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Flame className="w-3.5 h-3.5 text-rose-400" />
+                  Trailing Stop Loss do Projeto (%)
+                </label>
+                <span className="text-[10px] text-rose-400/90 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20 font-medium">
+                  Proteção Móvel de Topo
+                </span>
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={stopLossPercentage}
+                  onChange={(e) => setStopLossPercentage(e.target.value)}
+                  placeholder="Ex: 20 (Protege 80% do topo atingido)"
+                  className="w-full px-3.5 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-rose-500 pr-10"
+                />
+                <span className="absolute right-3.5 top-2.5 text-sm text-slate-400 font-bold">%</span>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                Calculado sobre o <strong>valor mais alto alcançado</strong> pela banca ativa. Se você começou com R$ 2,00 e subiu para R$ 2,30, um Stop Loss de 20% garantirá que a banca nunca caia abaixo de R$ 1,84 (80% de R$ 2,30).
+              </p>
             </div>
 
             {/* Strategy Title */}

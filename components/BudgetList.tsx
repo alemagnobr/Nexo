@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Budget, Transaction, Investment, View, Category } from '../types';
-import { Plus, Trash2, Target, AlertTriangle, CheckCircle, Edit2, AlertCircle, ChevronLeft, Calendar, ChevronRight, Repeat, CalendarClock, Info, TrendingUp, BarChart3, ArrowRight, Save, X, Ghost, Medal, LineChart } from 'lucide-react';
+import { Plus, Trash2, Target, AlertTriangle, CheckCircle, Edit2, AlertCircle, ChevronLeft, Calendar, ChevronRight, Repeat, CalendarClock, Info, TrendingUp, BarChart3, ArrowRight, Save, X, Ghost, Medal, LineChart, PiggyBank, Sparkles, Coins, Check } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import { CurrencyInput } from './CurrencyInput';
 
@@ -22,11 +22,6 @@ export const BudgetList: React.FC<BudgetListProps> = ({ budgets, transactions, i
   const [showAnalytics, setShowAnalytics] = useState(false);
   
   // Dynamic categories derived from transactions + defaults or passed as props
-  // Since we didn't add categories prop here in the interface, let's just infer from transactions or stick to basic string input?
-  // Ideally, App.tsx should pass categories. But to keep consistent, we can just extract unique categories from transactions if no prop is available, OR we assume categories exist in transaction logic. 
-  // Let's assume standard behavior: user types category or selects from known ones.
-  // Actually, let's fix the prop issue. But since I can't change App.tsx props easily without full rewrite, I will just list unique categories found in transactions + budgets as options.
-  
   const knownCategories = useMemo(() => {
       const cats = new Set<string>();
       transactions.forEach(t => cats.add(t.category));
@@ -43,8 +38,17 @@ export const BudgetList: React.FC<BudgetListProps> = ({ budgets, transactions, i
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
 
-  const [newBudget, setNewBudget] = useState({
+  const [newBudget, setNewBudget] = useState<{
+    type: 'expense' | 'investment';
+    category: string;
+    targetInvestmentId: string;
+    limit: string;
+    isRecurring: boolean;
+    month: string;
+  }>({
+    type: 'expense',
     category: knownCategories[0] || 'Lazer',
+    targetInvestmentId: 'ALL',
     limit: '',
     isRecurring: true,
     month: new Date().toISOString().slice(0, 7) // YYYY-MM
@@ -55,7 +59,9 @@ export const BudgetList: React.FC<BudgetListProps> = ({ budgets, transactions, i
     if (quickActionSignal && Date.now() - quickActionSignal < 2000) {
         setIsFormOpen(true);
         setNewBudget({ 
+            type: 'expense',
             category: knownCategories[0] || 'Lazer', 
+            targetInvestmentId: 'ALL',
             limit: '', 
             isRecurring: true, 
             month: new Date().toISOString().slice(0, 7) 
@@ -94,23 +100,43 @@ export const BudgetList: React.FC<BudgetListProps> = ({ budgets, transactions, i
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    const budgetType = newBudget.type || 'expense';
+    let categoryName = newBudget.category;
+
+    if (budgetType === 'investment') {
+      if (newBudget.targetInvestmentId && newBudget.targetInvestmentId !== 'ALL') {
+        const inv = investments.find(i => i.id === newBudget.targetInvestmentId);
+        categoryName = inv ? inv.name : 'Investimento';
+      } else {
+        categoryName = 'Investimentos (Geral)';
+      }
+    }
+
+    const numLimit = parseFloat(newBudget.limit);
+    if (isNaN(numLimit) || numLimit <= 0) {
+      alert('Informe um valor de teto/meta maior que zero.');
+      return;
+    }
+
     // Check conflicts
     if (newBudget.isRecurring) {
-        if (budgets.some(b => b.category === newBudget.category && b.isRecurring)) {
-            alert(`Já existe um orçamento recorrente para ${newBudget.category}. Exclua o anterior para criar um novo.`);
+        if (budgets.some(b => b.category === categoryName && b.isRecurring && (b.type || 'expense') === budgetType)) {
+            alert(`Já existe um orçamento recorrente para ${categoryName}. Exclua o anterior para criar um novo.`);
             return;
         }
     } else {
-        if (budgets.some(b => b.category === newBudget.category && b.month === newBudget.month)) {
-            alert(`Já existe um orçamento de ${newBudget.category} para ${newBudget.month}.`);
+        if (budgets.some(b => b.category === categoryName && b.month === newBudget.month && (b.type || 'expense') === budgetType)) {
+            alert(`Já existe um orçamento de ${categoryName} para ${newBudget.month}.`);
             return;
         }
     }
 
     const payload: Omit<Budget, 'id'> = {
-      category: newBudget.category,
-      limit: parseFloat(newBudget.limit),
+      category: categoryName,
+      limit: numLimit,
       isRecurring: newBudget.isRecurring,
+      type: budgetType,
+      targetInvestmentId: budgetType === 'investment' ? newBudget.targetInvestmentId : undefined,
     };
 
     if (!newBudget.isRecurring) {
@@ -118,7 +144,14 @@ export const BudgetList: React.FC<BudgetListProps> = ({ budgets, transactions, i
     }
 
     onAdd(payload);
-    setNewBudget({ category: knownCategories[0] || 'Outros', limit: '', isRecurring: true, month: getCurrentMonthKey() });
+    setNewBudget({
+      type: 'expense',
+      category: knownCategories[0] || 'Outros',
+      targetInvestmentId: 'ALL',
+      limit: '',
+      isRecurring: true,
+      month: getCurrentMonthKey()
+    });
     setIsFormOpen(false);
   };
 
@@ -156,13 +189,101 @@ export const BudgetList: React.FC<BudgetListProps> = ({ budgets, transactions, i
       .reduce((sum, t) => sum + t.amount, 0);
   };
 
+  // Helper para calcular total aportado em uma Meta de Investimento no mês selecionado
+  const getInvestedAmount = (budget: Budget) => {
+    const y = currentDate.getFullYear();
+    const m = currentDate.getMonth();
+
+    let totalFromInvestments = 0;
+
+    if (budget.targetInvestmentId && budget.targetInvestmentId !== 'ALL') {
+      const inv = investments.find(i => i.id === budget.targetInvestmentId);
+      if (inv && inv.history) {
+        totalFromInvestments = inv.history
+          .filter(h => {
+            if (h.type !== 'contribution') return false;
+            const hDate = new Date(h.date);
+            return hDate.getFullYear() === y && hDate.getMonth() === m;
+          })
+          .reduce((sum, h) => sum + h.amount, 0);
+      }
+    } else {
+      // Todos os investimentos
+      totalFromInvestments = investments.reduce((sum, inv) => {
+        if (!inv.history) return sum;
+        const contribs = inv.history
+          .filter(h => {
+            if (h.type !== 'contribution') return false;
+            const hDate = new Date(h.date);
+            return hDate.getFullYear() === y && hDate.getMonth() === m;
+          })
+          .reduce((s, h) => s + h.amount, 0);
+        return sum + contribs;
+      }, 0);
+    }
+
+    // Transações no mês vinculadas a aportes ou com a mesma categoria
+    const matchingTransactions = transactions
+      .filter(t => {
+        const tDate = new Date(t.date);
+        if (tDate.getFullYear() !== y || tDate.getMonth() !== m) return false;
+        if (t.type !== 'expense') return false;
+
+        if (budget.targetInvestmentId && budget.targetInvestmentId !== 'ALL') {
+          const inv = investments.find(i => i.id === budget.targetInvestmentId);
+          const invName = inv ? inv.name.toLowerCase() : '';
+          return (
+            t.category === budget.category ||
+            (invName && (t.description?.toLowerCase().includes(invName) || t.observation?.toLowerCase()?.includes(invName)))
+          );
+        }
+
+        const catLower = (t.category || '').toLowerCase();
+        return (
+          t.category === budget.category ||
+          catLower === 'investimentos' ||
+          catLower === 'investimento' ||
+          catLower === 'aportes' ||
+          catLower === 'aporte'
+        );
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    return Math.max(totalFromInvestments, matchingTransactions);
+  };
+
   const effectiveBudgets = useMemo(() => {
      const monthKey = getCurrentMonthKey();
      const specific = budgets.filter(b => b.month === monthKey);
-     const specificCategories = new Set(specific.map(b => b.category));
-     const recurring = budgets.filter(b => b.isRecurring && !specificCategories.has(b.category));
+     const specificKeys = new Set(specific.map(b => `${b.category}_${b.type || 'expense'}`));
+     const recurring = budgets.filter(b => b.isRecurring && !specificKeys.has(`${b.category}_${b.type || 'expense'}`));
      return [...specific, ...recurring].sort((a, b) => a.category.localeCompare(b.category));
   }, [budgets, currentDate]);
+
+  const expenseBudgets = useMemo(() => {
+    return effectiveBudgets.filter(b => (b.type || 'expense') === 'expense');
+  }, [effectiveBudgets]);
+
+  const investmentBudgets = useMemo(() => {
+    return effectiveBudgets.filter(b => b.type === 'investment');
+  }, [effectiveBudgets]);
+
+  // Resumo consolidado das Metas de Investimento do Mês
+  const investmentTotals = useMemo(() => {
+    let totalTarget = 0;
+    let totalInvested = 0;
+
+    investmentBudgets.forEach(b => {
+      totalTarget += b.limit;
+      totalInvested += getInvestedAmount(b);
+    });
+
+    const remaining = Math.max(0, totalTarget - totalInvested);
+    const percentage = totalTarget > 0 ? (totalInvested / totalTarget) * 100 : 0;
+    const isCompleted = totalTarget > 0 && totalInvested >= totalTarget;
+
+    return { totalTarget, totalInvested, remaining, percentage, isCompleted };
+  }, [investmentBudgets, investments, transactions, currentDate]);
 
   // Goals (Investments with Target)
   const investmentGoals = useMemo(() => {
@@ -282,10 +403,10 @@ export const BudgetList: React.FC<BudgetListProps> = ({ budgets, transactions, i
                 setNewBudget(prev => ({...prev, month: getCurrentMonthKey()}));
                 setIsFormOpen(!isFormOpen);
             }}
-            className="flex items-center gap-2 bg-pink-600 text-white px-4 py-2.5 rounded-lg hover:bg-pink-700 transition-colors shadow-sm text-sm font-medium"
+            className="flex items-center gap-2 bg-gradient-to-r from-pink-600 to-indigo-600 text-white px-4 py-2.5 rounded-lg hover:from-pink-700 hover:to-indigo-700 transition-all shadow-sm text-sm font-medium"
             >
             <Plus className="w-4 h-4" />
-            Definir Teto
+            Novo Teto ou Meta
             </button>
         </div>
       </div>
@@ -329,15 +450,113 @@ export const BudgetList: React.FC<BudgetListProps> = ({ budgets, transactions, i
           </div>
       )}
 
+      {/* CARD CONSOLIDADO DE METAS DE INVESTIMENTO DO MÊS */}
+      {investmentBudgets.length > 0 && (
+        <div className="p-5 md:p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent dark:from-emerald-950/40 dark:via-teal-950/20 border border-emerald-200 dark:border-emerald-800/60 shadow-sm animate-fade-in">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="p-3 rounded-xl bg-emerald-500 text-white shadow-md shadow-emerald-500/20">
+                <PiggyBank className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                    Meta de Aportes do Mês
+                  </h3>
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300 capitalize">
+                    {formatMonth(currentDate)}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                  {investmentTotals.isCompleted ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" /> Parabéns! Você bateu sua meta de aportes este mês.
+                    </span>
+                  ) : (
+                    <span className="text-slate-600 dark:text-slate-300">
+                      🎯 Faltam <strong>{formatValue(investmentTotals.remaining)}</strong> para bater a meta planejada.
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 md:gap-6 justify-between md:justify-end">
+              <div className="text-right">
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Aportado / Meta</p>
+                <p className="text-base md:text-lg font-black text-slate-900 dark:text-white">
+                  <span className="text-emerald-600 dark:text-emerald-400">{formatValue(investmentTotals.totalInvested)}</span>
+                  <span className="text-slate-400 dark:text-slate-500 text-sm font-normal"> / {formatValue(investmentTotals.totalTarget)}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => onNavigate(View.INVESTMENTS)}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 whitespace-nowrap"
+              >
+                Fazer Aporte <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="mt-4">
+            <div className="flex justify-between text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5">
+              <span>Progresso dos Aportes</span>
+              <span className={investmentTotals.isCompleted ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300'}>
+                {investmentTotals.percentage.toFixed(0)}%
+              </span>
+            </div>
+            <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${
+                  investmentTotals.isCompleted
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_12px_rgba(16,185,129,0.5)]'
+                    : 'bg-emerald-500'
+                }`}
+                style={{ width: `${Math.min(100, investmentTotals.percentage)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {isFormOpen && (
         <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in-down">
+          {/* Aba de seleção: Limite de Gastos vs Meta de Investimento */}
           <div className="col-span-1 md:col-span-2">
-            <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-2">Novo Limite de Gastos</h3>
+            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-1.5">Tipo de Planejamento</label>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-700/60 rounded-xl border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setNewBudget(prev => ({ ...prev, type: 'expense', category: knownCategories[0] || 'Lazer' }))}
+                className={`py-2 px-3 rounded-lg text-xs md:text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+                  newBudget.type === 'expense'
+                    ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-sm border border-slate-200 dark:border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <AlertCircle className="w-4 h-4" />
+                Teto de Gastos (Despesas)
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewBudget(prev => ({ ...prev, type: 'investment', targetInvestmentId: 'ALL', category: 'Investimentos (Geral)' }))}
+                className={`py-2 px-3 rounded-lg text-xs md:text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+                  newBudget.type === 'investment'
+                    ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm border border-slate-200 dark:border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <PiggyBank className="w-4 h-4" />
+                Meta de Investimento (Aporte)
+              </button>
+            </div>
           </div>
-          
-          <div className="flex flex-col gap-1">
-             <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Categoria</label>
-             <select
+
+          {newBudget.type === 'expense' ? (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Categoria de Despesa</label>
+              <select
                 value={newBudget.category}
                 onChange={e => setNewBudget({ ...newBudget, category: e.target.value })}
                 className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-pink-500"
@@ -346,18 +565,56 @@ export const BudgetList: React.FC<BudgetListProps> = ({ budgets, transactions, i
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
-          </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Destino do Aporte / Ativo</label>
+              <select
+                value={newBudget.targetInvestmentId}
+                onChange={e => {
+                  const targetId = e.target.value;
+                  const inv = investments.find(i => i.id === targetId);
+                  setNewBudget({
+                    ...newBudget,
+                    targetInvestmentId: targetId,
+                    category: targetId === 'ALL' ? 'Investimentos (Geral)' : (inv?.name || 'Investimento')
+                  });
+                }}
+                className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+              >
+                <option value="ALL">🌟 Todos os Investimentos (Meta Geral de Aportes)</option>
+                {investments.map(inv => (
+                  <option key={inv.id} value={inv.id}>
+                    💼 {inv.name} - {inv.type} (Saldo: R$ {inv.amount.toFixed(2)})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1">
-             <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Valor Teto (R$)</label>
+             <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+               {newBudget.type === 'expense' ? 'Valor Teto de Gastos (R$)' : 'Meta de Aporte Mensal (R$)'}
+             </label>
              <CurrencyInput
                 required
-                placeholder="Ex: 1000.00"
+                placeholder={newBudget.type === 'expense' ? 'Ex: 1000.00' : 'Ex: 500.00'}
                 value={newBudget.limit}
                 onChangeValue={val => setNewBudget({ ...newBudget, limit: val })}
-                className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-pink-500"
+                className={`border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg p-2.5 outline-none focus:ring-2 ${
+                  newBudget.type === 'expense' ? 'focus:ring-pink-500' : 'focus:ring-emerald-500'
+                }`}
               />
           </div>
+
+          {newBudget.type === 'investment' && (
+            <div className="col-span-1 md:col-span-2 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <p>
+                <strong>Como funciona a Meta de Investimentos:</strong> O sistema acompanhará todos os aportes feitos neste mês (nas caixinhas, ativos ou via transações) e te alertará quanto ainda falta para atingir o teto estipulado!
+              </p>
+            </div>
+          )}
 
           <div className="col-span-1 md:col-span-2 bg-slate-50 dark:bg-slate-700/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
              <div className="flex items-center gap-2 mb-3">
@@ -366,16 +623,16 @@ export const BudgetList: React.FC<BudgetListProps> = ({ budgets, transactions, i
                     id="isRecurringBudget"
                     checked={newBudget.isRecurring}
                     onChange={(e) => setNewBudget({...newBudget, isRecurring: e.target.checked})}
-                    className="w-4 h-4 text-pink-600 rounded"
+                    className={`w-4 h-4 rounded ${newBudget.type === 'expense' ? 'text-pink-600' : 'text-emerald-600'}`}
                  />
                  <label htmlFor="isRecurringBudget" className="text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1 cursor-pointer">
-                    <Repeat className="w-4 h-4" /> Orçamento Recorrente?
+                    <Repeat className="w-4 h-4" /> {newBudget.type === 'expense' ? 'Orçamento Recorrente?' : 'Meta Mensal Recorrente?'}
                  </label>
              </div>
              
              {newBudget.isRecurring ? (
                  <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                    <Info className="w-3 h-3" /> Este limite será aplicado automaticamente em todos os meses futuros.
+                    <Info className="w-3 h-3" /> {newBudget.type === 'expense' ? 'Este limite será aplicado automaticamente em todos os meses futuros.' : 'Esta meta de aportes será cobrada automaticamente todo mês.'}
                  </p>
              ) : (
                  <div className="animate-fade-in">
@@ -393,24 +650,188 @@ export const BudgetList: React.FC<BudgetListProps> = ({ budgets, transactions, i
 
           <div className="col-span-1 md:col-span-2 flex justify-end gap-2 mt-2">
             <button type="button" onClick={() => setIsFormOpen(false)} className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">Cancelar</button>
-            <button type="submit" className="px-6 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 font-medium">Salvar Teto</button>
+            <button 
+              type="submit" 
+              className={`px-6 py-2 text-white rounded-lg font-medium shadow-sm transition-colors ${
+                newBudget.type === 'expense' ? 'bg-pink-600 hover:bg-pink-700' : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}
+            >
+              {newBudget.type === 'expense' ? 'Salvar Teto' : 'Salvar Meta de Investimento'}
+            </button>
           </div>
         </form>
       )}
 
-      {/* --- SECTION 1: SPENDING LIMITS (Tetos) --- */}
+      {/* --- SEÇÃO 1: METAS DE INVESTIMENTO (APORTES MENSAIS) --- */}
       <div className="mb-10">
-          <h3 className="text-lg font-bold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
-             <AlertCircle className="w-5 h-5 text-rose-500" /> Tetos de Gastos
-          </h3>
+          <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                 <PiggyBank className="w-5 h-5 text-emerald-500" /> Metas de Investimento do Mês
+              </h3>
+              <button 
+                onClick={() => {
+                  setNewBudget({
+                    type: 'investment',
+                    category: 'Investimentos (Geral)',
+                    targetInvestmentId: 'ALL',
+                    limit: '',
+                    isRecurring: true,
+                    month: getCurrentMonthKey()
+                  });
+                  setIsFormOpen(true);
+                }}
+                className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 flex items-center gap-1 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> Nova Meta de Aporte
+              </button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {effectiveBudgets.length === 0 ? (
-              <div className="col-span-full py-12 text-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                <Target className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 dark:text-slate-400 font-medium">Nenhum teto definido.</p>
+            {investmentBudgets.length === 0 ? (
+              <div className="col-span-full py-8 text-center bg-emerald-50/30 dark:bg-emerald-950/20 rounded-xl border border-dashed border-emerald-200 dark:border-emerald-800/60">
+                <PiggyBank className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
+                <p className="text-slate-700 dark:text-slate-300 font-medium text-sm">Nenhuma meta de investimento definida para este mês.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+                  Crie uma meta de aporte para definir quanto quer investir e receber o alerta em tempo real de quanto falta!
+                </p>
+                <button 
+                  onClick={() => {
+                    setNewBudget({
+                      type: 'investment',
+                      category: 'Investimentos (Geral)',
+                      targetInvestmentId: 'ALL',
+                      limit: '',
+                      isRecurring: true,
+                      month: getCurrentMonthKey()
+                    });
+                    setIsFormOpen(true);
+                  }}
+                  className="mt-3 text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 px-3.5 py-1.5 rounded-lg font-bold transition-colors inline-flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Definir Meta de Aporte
+                </button>
               </div>
             ) : (
-                effectiveBudgets.map(budget => {
+              investmentBudgets.map(budget => {
+                const invested = getInvestedAmount(budget);
+                const percentage = Math.min(100, budget.limit > 0 ? (invested / budget.limit) * 100 : 0);
+                const isReached = invested >= budget.limit;
+                const remaining = Math.max(0, budget.limit - invested);
+
+                return (
+                  <div key={budget.id} className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-emerald-100 dark:border-emerald-900/30 hover:shadow-md transition-all relative group">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
+                          <PiggyBank className="w-5 h-5" />
+                        </div>
+                        <div>
+                           <h3 className="font-bold text-slate-800 dark:text-white">{budget.category}</h3>
+                           <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                               {budget.isRecurring ? <Repeat className="w-3 h-3"/> : <CalendarClock className="w-3 h-3"/>}
+                               {budget.isRecurring ? 'Meta Mensal' : 'Mês Específico'}
+                           </p>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1">
+                        {editingId === budget.id ? (
+                            <div className="flex items-center gap-1 animate-fade-in">
+                               <CurrencyInput 
+                                  autoFocus
+                                  className="w-20 p-1 text-sm border rounded bg-white dark:bg-slate-900 dark:text-white dark:border-slate-600"
+                                  value={editValue}
+                                  onChangeValue={(val) => setEditValue(val)}
+                                  onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(budget.id)}
+                               />
+                               <button onClick={() => handleSaveEdit(budget.id)} className="p-1 bg-emerald-100 text-emerald-600 rounded hover:bg-emerald-200"><Save className="w-3 h-3"/></button>
+                               <button onClick={() => setEditingId(null)} className="p-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200"><X className="w-3 h-3"/></button>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-1">
+                                <button onClick={() => startEditing(budget)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded" title="Editar Meta"><Edit2 className="w-4 h-4"/></button>
+                                <button onClick={() => onDelete(budget.id)} className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded" title="Excluir Meta"><Trash2 className="w-4 h-4"/></button>
+                            </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 relative">
+                      <div className="flex justify-between items-end text-sm">
+                        <span className="text-slate-600 dark:text-slate-300 font-medium">
+                          Aportado: <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatValue(invested)}</span>
+                        </span>
+                        <span className="text-xs text-slate-400">Meta: {formatValue(budget.limit)}</span>
+                      </div>
+
+                      <div className="w-full h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden relative">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-700 ${isReached ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-emerald-500'}`} 
+                          style={{ width: `${percentage}%` }}
+                        ></div>
+                      </div>
+
+                      <div className="pt-2">
+                        {isReached ? (
+                          <div className="p-2 rounded-lg bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 flex items-center justify-between text-xs">
+                            <span className="font-bold text-teal-800 dark:text-teal-300 flex items-center gap-1">
+                              <Sparkles className="w-3.5 h-3.5 text-teal-600" /> Meta Batida!
+                            </span>
+                            <span className="font-bold text-teal-700 dark:text-teal-400">
+                              {invested > budget.limit ? `+ ${formatValue(invested - budget.limit)} acima 🚀` : '100% Batida 🎉'}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between text-xs">
+                            <span className="font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                              <Target className="w-3.5 h-3.5 text-emerald-600" /> Faltam para a meta:
+                            </span>
+                            <span className="font-black text-emerald-700 dark:text-emerald-400">
+                              {formatValue(remaining)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+      </div>
+
+      {/* --- SEÇÃO 2: SPENDING LIMITS (Tetos de Gastos) --- */}
+      <div className="mb-10">
+          <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                 <AlertCircle className="w-5 h-5 text-rose-500" /> Tetos de Gastos (Despesas)
+              </h3>
+              <button 
+                onClick={() => {
+                  setNewBudget({
+                    type: 'expense',
+                    category: knownCategories[0] || 'Lazer',
+                    targetInvestmentId: 'ALL',
+                    limit: '',
+                    isRecurring: true,
+                    month: getCurrentMonthKey()
+                  });
+                  setIsFormOpen(true);
+                }}
+                className="text-xs font-semibold text-pink-600 hover:text-pink-700 dark:text-pink-400 flex items-center gap-1 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> Novo Teto de Gastos
+              </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {expenseBudgets.length === 0 ? (
+              <div className="col-span-full py-12 text-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+                <Target className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 dark:text-slate-400 font-medium">Nenhum teto de gastos definido.</p>
+              </div>
+            ) : (
+                expenseBudgets.map(budget => {
                 const spent = getSpentAmount(budget.category);
                 const forecast = calculateForecast(spent);
                 const percentage = Math.min(100, (spent / budget.limit) * 100);

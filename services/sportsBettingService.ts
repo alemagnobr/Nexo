@@ -264,6 +264,7 @@ export function createSportsProject(params: {
   compoundPercentage: number;
   protectionPercentage: number;
   minimumStake?: number;
+  stopLossPercentage?: number;
   stopLossDaily?: number;
   stopGainDaily?: number;
   notes?: string;
@@ -279,6 +280,7 @@ export function createSportsProject(params: {
     compoundPercentage: Number(params.compoundPercentage) || 70,
     protectionPercentage: Number(params.protectionPercentage) || 30,
     minimumStake: Number(params.minimumStake) || 5,
+    stopLossPercentage: params.stopLossPercentage ? Number(params.stopLossPercentage) : undefined,
     stopLossDaily: params.stopLossDaily ? Number(params.stopLossDaily) : undefined,
     stopGainDaily: params.stopGainDaily ? Number(params.stopGainDaily) : undefined,
     strategyName: params.name,
@@ -1053,6 +1055,42 @@ export function getSportsBettingStats(data: SportsBettingData) {
     })),
   ];
 
+  // Maior banca ativa histórica alcançada (Trailing Peak)
+  // Segue sempre o maior valor atingido (banca inicial, evolução das operações ou banca atual)
+  const bankrollHistory = [
+    config.initialBankroll,
+    config.currentBankroll,
+    ...completedOps.map((op) => op.bankrollAfter ?? 0),
+    ...completedOps.map((op) => op.bankrollBefore ?? 0),
+  ];
+  const peakBankroll = Math.max(...bankrollHistory, 0);
+
+  const stopLossPercentage = config.stopLossPercentage ? Number(config.stopLossPercentage) : undefined;
+  
+  // Piso do Stop Loss: nível mínimo que a banca pode atingir antes de estourar o stop loss
+  // Ex: Maior banca alcançada = R$ 2,30 com stop loss de 50% => Perda máxima de R$ 1,15 => Piso = R$ 1,15
+  const stopLossFloor = (stopLossPercentage !== undefined && stopLossPercentage > 0)
+    ? Math.max(0, Math.round(peakBankroll * (1 - stopLossPercentage / 100) * 100) / 100)
+    : undefined;
+
+  const maxAllowedLoss = (stopLossPercentage !== undefined && stopLossPercentage > 0)
+    ? Math.round(peakBankroll * (stopLossPercentage / 100) * 100) / 100
+    : undefined;
+
+  // Queda atual a partir da maior banca histórica (Drawdown do topo)
+  const currentDrawdown = peakBankroll > 0
+    ? Math.max(0, Math.round(((peakBankroll - config.currentBankroll) / peakBankroll) * 1000) / 10)
+    : 0;
+  const currentDrawdownAmount = Math.max(0, Math.round((peakBankroll - config.currentBankroll) * 100) / 100);
+
+  // Indica se a banca atingiu ou rompeu o piso do Stop Loss
+  const isStopLossTriggered = (stopLossFloor !== undefined) && (config.currentBankroll <= stopLossFloor);
+
+  // Margem restante até o corte do Stop Loss
+  const stopLossMargin = stopLossFloor !== undefined
+    ? Math.round((config.currentBankroll - stopLossFloor) * 100) / 100
+    : undefined;
+
   return {
     totalOps,
     completedCount,
@@ -1074,6 +1112,14 @@ export function getSportsBettingStats(data: SportsBettingData) {
     avgOdds: Math.round(avgOdds * 100) / 100,
     maxWin: Math.round(maxWin * 100) / 100,
     maxLoss: Math.round(maxLoss * 100) / 100,
+    peakBankroll: Math.round(peakBankroll * 100) / 100,
+    stopLossPercentage,
+    stopLossFloor,
+    maxAllowedLoss,
+    currentDrawdown,
+    currentDrawdownAmount,
+    isStopLossTriggered,
+    stopLossMargin,
     currentStreakType,
     currentStreakCount,
     marketBreakdown,

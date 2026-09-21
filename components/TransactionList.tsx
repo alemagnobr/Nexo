@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Transaction, TransactionType, TransactionStatus, PaymentMethod, Budget, View, Category, Wallet as WalletData, WalletType } from '../types';
-import { Plus, Trash2, CheckCircle, Clock, ArrowUpCircle, ArrowDownCircle, Wallet, Wand2, Loader2, Camera, Repeat, ChevronLeft, ChevronRight, Calendar, Pencil, ListFilter, AlertTriangle, AlertCircle, Layers, Bell, Search, Filter, X, Smartphone, CreditCard, Banknote, Landmark, Save, MoreHorizontal, Sigma, CalendarDays, StickyNote, Baby, Briefcase, Infinity, Zap, ChevronUp, ChevronDown, ArrowDown, ArrowUp, TrendingUp } from 'lucide-react';
+import { Transaction, TransactionType, TransactionStatus, PaymentMethod, Budget, View, Category, Wallet as WalletData, WalletType, Investment, InvestmentHistory } from '../types';
+import { Plus, Trash2, CheckCircle, Clock, ArrowUpCircle, ArrowDownCircle, Wallet, Wand2, Loader2, Camera, Repeat, ChevronLeft, ChevronRight, Calendar, Pencil, ListFilter, AlertTriangle, AlertCircle, Layers, Bell, Search, Filter, X, Smartphone, CreditCard, Banknote, Landmark, Save, MoreHorizontal, Sigma, CalendarDays, StickyNote, Baby, Briefcase, Infinity, Zap, ChevronUp, ChevronDown, ArrowDown, ArrowUp, TrendingUp, Target, Sparkles, Check } from 'lucide-react';
 import { suggestCategory, analyzeReceipt } from '../services/geminiService';
 import { WalletsView } from './WalletsView';
 import { CurrencyInput } from './CurrencyInput';
@@ -11,6 +11,7 @@ interface TransactionListProps {
   budgets: Budget[];
   categories?: Category[]; // New prop
   wallets?: WalletData[]; // New prop
+  investments?: Investment[]; // For investment goals progress
   onAdd: (t: Omit<Transaction, 'id'>) => void;
   onUpdate: (id: string, updates: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
@@ -69,7 +70,7 @@ const PaymentIcon = ({ method, className }: { method: string, className?: string
 const EXPENSE_PAYMENT_METHODS = ['credit_card', 'debit_card', 'direct_debit', 'pix', 'cash', 'boleto'];
 const INCOME_PAYMENT_METHODS = ['pix', 'bank_transfer', 'cash', 'deposit'];
 
-export const TransactionList: React.FC<TransactionListProps> = ({ transactions, budgets, categories = [], wallets = [], onAdd, onUpdate, onDelete, onToggleStatus, onAddWallet, onUpdateWallet, onDeleteWallet, onNavigate, privacyMode, hasApiKey, quickActionSignal }) => {
+export const TransactionList: React.FC<TransactionListProps> = ({ transactions, budgets, categories = [], wallets = [], investments = [], onAdd, onUpdate, onDelete, onToggleStatus, onAddWallet, onUpdateWallet, onDeleteWallet, onNavigate, privacyMode, hasApiKey, quickActionSignal }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [loadingAutoCat, setLoadingAutoCat] = useState(false);
   const [analyzingReceipt, setAnalyzingReceipt] = useState(false);
@@ -99,6 +100,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [paymentFilter, setPaymentFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [showBudgetsPanel, setShowBudgetsPanel] = useState(false);
   
   // --- EDITING & RECURRENCE STATE ---
   const [editingId, setEditingId] = useState<string | null>(null); // For full form
@@ -207,6 +209,129 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
   const handlePrevMonth = () => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
   const handleNextMonth = () => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
 
+  // --- ALERTS & BUDGETS PROGRESS LOGIC ---
+  const selectedMonthStr = useMemo(() => {
+    const y = currentDate.getFullYear();
+    const m = String(currentDate.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }, [currentDate]);
+
+  // Metas e Tetos efetivos para o mês selecionado
+  const monthBudgetData = useMemo(() => {
+    const y = currentDate.getFullYear();
+    const m = currentDate.getMonth();
+    const monthKey = selectedMonthStr;
+
+    // Achar os budgets ativos no mês
+    const specific = budgets.filter(b => b.month === monthKey);
+    const specificKeys = new Set(specific.map(b => `${b.category}_${b.type || 'expense'}`));
+    const recurring = budgets.filter(b => b.isRecurring && !specificKeys.has(`${b.category}_${b.type || 'expense'}`));
+    const effective = [...specific, ...recurring];
+
+    // Transações do mês
+    const monthExpenses = transactions.filter(t => {
+      const tDate = new Date(t.date);
+      return tDate.getFullYear() === y && tDate.getMonth() === m && t.type === 'expense';
+    });
+
+    // Separar em Metas de Investimento e Tetos de Despesas
+    const investmentGoals = effective
+      .filter(b => b.type === 'investment')
+      .map(budget => {
+        let totalInvested = 0;
+        if (budget.targetInvestmentId && budget.targetInvestmentId !== 'ALL') {
+          const inv = investments.find(i => i.id === budget.targetInvestmentId);
+          if (inv && inv.history) {
+            totalInvested = inv.history
+              .filter((h: InvestmentHistory) => {
+                if (h.type !== 'contribution') return false;
+                const hDate = new Date(h.date);
+                return hDate.getFullYear() === y && hDate.getMonth() === m;
+              })
+              .reduce((sum: number, h: InvestmentHistory) => sum + h.amount, 0);
+          }
+        } else {
+          totalInvested = investments.reduce((sum: number, inv: Investment) => {
+            if (!inv.history) return sum;
+            const contribs = inv.history
+              .filter((h: InvestmentHistory) => {
+                if (h.type !== 'contribution') return false;
+                const hDate = new Date(h.date);
+                return hDate.getFullYear() === y && hDate.getMonth() === m;
+              })
+              .reduce((s: number, h: InvestmentHistory) => s + h.amount, 0);
+            return sum + contribs;
+          }, 0);
+        }
+
+        // Também checa transações categorizadas como investimento ou nome do ativo
+        const matchingTrans = monthExpenses
+          .filter(t => {
+            if (budget.targetInvestmentId && budget.targetInvestmentId !== 'ALL') {
+              const inv = investments.find(i => i.id === budget.targetInvestmentId);
+              const invName = inv ? inv.name.toLowerCase() : '';
+              return t.category === budget.category || (invName && (t.description?.toLowerCase().includes(invName) || t.observation?.toLowerCase()?.includes(invName)));
+            }
+            const catLower = (t.category || '').toLowerCase();
+            return t.category === budget.category || ['investimentos', 'investimento', 'aportes', 'aporte'].includes(catLower);
+          })
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        const progress = Math.max(totalInvested, matchingTrans);
+        const remaining = Math.max(0, budget.limit - progress);
+        const percent = budget.limit > 0 ? Math.min(100, Math.round((progress / budget.limit) * 100)) : 0;
+        const isCompleted = progress >= budget.limit;
+
+        return {
+          ...budget,
+          progress,
+          remaining,
+          percent,
+          isCompleted,
+        };
+      });
+
+    const expenseBudgets = effective
+      .filter(b => (b.type || 'expense') === 'expense')
+      .map(budget => {
+        const spent = monthExpenses
+          .filter(t => t.category === budget.category)
+          .reduce((sum, t) => sum + t.amount, 0);
+        const remaining = Math.max(0, budget.limit - spent);
+        const percent = budget.limit > 0 ? Math.min(100, Math.round((spent / budget.limit) * 100)) : 0;
+        const isExceeded = spent >= budget.limit;
+        const isWarning = !isExceeded && spent >= budget.limit * 0.8;
+
+        return {
+          ...budget,
+          spent,
+          remaining,
+          percent,
+          isExceeded,
+          isWarning,
+        };
+      });
+
+    // Mapa rápido por categoria para indicar na tabela
+    const expenseBudgetMap: Record<string, { limit: number; spent: number; percent: number; isExceeded: boolean; isWarning: boolean }> = {};
+    expenseBudgets.forEach(b => {
+      expenseBudgetMap[b.category] = {
+        limit: b.limit,
+        spent: b.spent,
+        percent: b.percent,
+        isExceeded: b.isExceeded,
+        isWarning: b.isWarning,
+      };
+    });
+
+    return {
+      investmentGoals,
+      expenseBudgets,
+      expenseBudgetMap,
+      hasAnyBudget: investmentGoals.length > 0 || expenseBudgets.length > 0
+    };
+  }, [budgets, transactions, investments, currentDate, selectedMonthStr]);
+
   // --- ALERTS LOGIC ---
   const budgetAlerts = useMemo(() => {
     const alerts: { title: string; message: string; type: 'warning' }[] = [];
@@ -216,7 +341,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
     const monthStr = today.toISOString().slice(0, 7);
 
     budgets.forEach(budget => {
-        const isRelevant = (budget.isRecurring && !budgets.some(b => b.category === budget.category && b.month === monthStr && !b.isRecurring)) || budget.month === monthStr;
+        // Ignora metas de investimento nos alertas de "Limite Excedido"
+        if (budget.type === 'investment') return;
+
+        const isRelevant = (budget.isRecurring && !budgets.some(b => b.category === budget.category && b.month === monthStr && !b.isRecurring && (b.type || 'expense') === 'expense')) || budget.month === monthStr;
         
         if (!isRelevant) return;
 
@@ -1008,9 +1136,9 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
         </div>
       )}
 
-      {/* Wallets Section */}
-      {onAddWallet && onUpdateWallet && onDeleteWallet && (
-        <div className="mb-8">
+      {/* Wallets & Budgets Top Panels */}
+      <div className="space-y-3 mb-6">
+        {onAddWallet && onUpdateWallet && onDeleteWallet && (
           <WalletsView 
             wallets={wallets || []}
             transactions={transactions}
@@ -1022,8 +1150,172 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
             onUpdateTransaction={onUpdate}
             onAddTransaction={onAdd}
           />
-        </div>
-      )}
+        )}
+
+        {/* Metas de Investimento e Tetos de Gastos (logo abaixo de Minhas Contas) */}
+        {monthBudgetData.hasAnyBudget && (
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden animate-fade-in transition-all">
+            <div className={`px-4 md:px-6 py-3.5 bg-slate-50/70 dark:bg-slate-900/40 ${showBudgetsPanel ? 'border-b border-slate-100 dark:border-slate-700/60' : ''} flex items-center justify-between`}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-teal-500/10 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center">
+                  <Target className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    Metas & Orçamentos do Mês
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                      {monthBudgetData.investmentGoals.length} meta{monthBudgetData.investmentGoals.length !== 1 ? 's' : ''} • {monthBudgetData.expenseBudgets.length} teto{monthBudgetData.expenseBudgets.length !== 1 ? 's' : ''}
+                    </span>
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onNavigate(View.BUDGETS)}
+                  className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                  title="Ir para tela de Orçamentos"
+                >
+                  Gerenciar <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setShowBudgetsPanel(prev => !prev)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  title={showBudgetsPanel ? "Ocultar painel" : "Expandir painel"}
+                >
+                  {showBudgetsPanel ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {showBudgetsPanel && (
+              <div className="p-4 md:p-5 space-y-4">
+                {/* Metas de Investimento */}
+                {monthBudgetData.investmentGoals.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-teal-700 dark:text-teal-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5" /> Metas de Aporte & Investimentos
+                      </span>
+                      <button
+                        onClick={() => onNavigate(View.INVESTMENTS)}
+                        className="text-[11px] font-medium text-teal-600 dark:text-teal-400 hover:underline"
+                      >
+                        Ver Investimentos
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {monthBudgetData.investmentGoals.map(goal => (
+                        <div 
+                          key={goal.id} 
+                          className={`p-3.5 rounded-xl border transition-all ${
+                            goal.isCompleted 
+                              ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/50' 
+                              : 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-700/60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-slate-800 dark:text-slate-200 truncate max-w-[170px]">
+                                {goal.category}
+                              </span>
+                              {goal.targetInvestmentId && goal.targetInvestmentId !== 'ALL' && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 font-semibold truncate max-w-[100px]">
+                                  {investments.find(i => i.id === goal.targetInvestmentId)?.name || 'Ativo'}
+                                </span>
+                              )}
+                            </div>
+                            {goal.isCompleted ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white flex items-center gap-1 shadow-sm">
+                                <Check className="w-3 h-3" /> Meta Batida!
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 px-2 py-0.5 rounded-full">
+                                Faltam {formatValue(goal.remaining)}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Barra de Progresso */}
+                          <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden my-2">
+                            <div
+                              className={`h-full transition-all duration-500 rounded-full ${
+                                goal.isCompleted ? 'bg-emerald-500' : 'bg-teal-500'
+                              }`}
+                              style={{ width: `${Math.min(100, goal.percent)}%` }}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                            <span>Aportado: <strong className="text-slate-700 dark:text-slate-200">{formatValue(goal.progress)}</strong></span>
+                            <span>Meta: <strong className="text-slate-700 dark:text-slate-200">{formatValue(goal.limit)}</strong> ({goal.percent}%)</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tetos de Gastos (Despesas) */}
+                {monthBudgetData.expenseBudgets.length > 0 && (
+                  <div className={monthBudgetData.investmentGoals.length > 0 ? "pt-2 border-t border-slate-100 dark:border-slate-700/60" : ""}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5" /> Tetos de Gastos por Categoria
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                      {monthBudgetData.expenseBudgets.map(b => (
+                        <div 
+                          key={b.id} 
+                          className={`p-2.5 rounded-xl border text-xs transition-all ${
+                            b.isExceeded 
+                              ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/50' 
+                              : b.isWarning 
+                              ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50' 
+                              : 'bg-slate-50/60 dark:bg-slate-900/40 border-slate-200/60 dark:border-slate-700/40'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-slate-800 dark:text-slate-200 truncate pr-1">
+                              {b.category}
+                            </span>
+                            <span className={`text-[10px] font-black ${
+                              b.isExceeded 
+                                ? 'text-rose-600 dark:text-rose-400' 
+                                : b.isWarning 
+                                ? 'text-amber-600 dark:text-amber-400' 
+                                : 'text-slate-500 dark:text-slate-400'
+                            }`}>
+                              {b.percent}%
+                            </span>
+                          </div>
+
+                          <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-1.5">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                b.isExceeded ? 'bg-rose-500' : b.isWarning ? 'bg-amber-500' : 'bg-indigo-500'
+                              }`}
+                              style={{ width: `${Math.min(100, b.percent)}%` }}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                            <span>{formatValue(b.spent)}</span>
+                            <span className="font-semibold">{b.isExceeded ? `+${formatValue(b.spent - b.limit)}` : `Resta ${formatValue(b.remaining)}`}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* 1. TOP BAR: Title, Search, Actions */}
       <div className="flex flex-col gap-4">
@@ -1793,8 +2085,20 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
                                                   
                                                   <div className="flex justify-between items-center mt-1">
                                                       <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                                                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${getCategoryStyle(t.category)}`}>
+                                                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border flex items-center gap-1 ${getCategoryStyle(t.category)}`}>
                                                               {t.category}
+                                                              {monthBudgetData.expenseBudgetMap[t.category] && (
+                                                                  <span 
+                                                                      className={`w-1.5 h-1.5 rounded-full inline-block shrink-0 ${
+                                                                          monthBudgetData.expenseBudgetMap[t.category].isExceeded 
+                                                                              ? 'bg-rose-500 animate-pulse' 
+                                                                              : monthBudgetData.expenseBudgetMap[t.category].isWarning 
+                                                                              ? 'bg-amber-500' 
+                                                                              : 'bg-emerald-500'
+                                                                      }`} 
+                                                                      title={`Teto: ${monthBudgetData.expenseBudgetMap[t.category].percent}% usado`}
+                                                                  />
+                                                              )}
                                                           </span>
                                                           {t.isRecurring && (
                                                               <span className="flex items-center gap-0.5 text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded" title="Recorrente Infinito">
@@ -1894,8 +2198,19 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
 
                                                   {/* Category */}
                                                   <div className="w-24 shrink-0">
-                                                      <span className={`px-2 py-1 rounded text-[10px] font-medium border block text-center truncate ${getCategoryStyle(t.category)}`}>
-                                                          {t.category}
+                                                      <span className={`px-2 py-1 rounded text-[10px] font-medium border flex items-center justify-center gap-1 text-center truncate ${getCategoryStyle(t.category)}`} title={monthBudgetData.expenseBudgetMap[t.category] ? `Teto: ${monthBudgetData.expenseBudgetMap[t.category].percent}% usado` : undefined}>
+                                                          <span className="truncate">{t.category}</span>
+                                                          {monthBudgetData.expenseBudgetMap[t.category] && (
+                                                              <span 
+                                                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                                                      monthBudgetData.expenseBudgetMap[t.category].isExceeded 
+                                                                          ? "bg-rose-500 animate-pulse" 
+                                                                          : monthBudgetData.expenseBudgetMap[t.category].isWarning 
+                                                                          ? "bg-amber-500" 
+                                                                          : "bg-emerald-500"
+                                                                  }`} 
+                                                              />
+                                                          )}
                                                       </span>
                                                   </div>
 

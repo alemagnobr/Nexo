@@ -141,7 +141,7 @@ export const getCardGradient = (color: string = 'blue') => {
 
 export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions = [], categories = [], onAdd, onUpdate, onDelete, onTransfer, onUpdateTransaction, onAddTransaction }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string>('');
   const [walletToDelete, setWalletToDelete] = useState<string | null>(null);
@@ -706,35 +706,46 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
   };
 
   return (
-    <div className="space-y-4 animate-fade-in">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors"
-          >
-            {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-          </button>
-          <div>
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-              <Landmark className="w-5 h-5 text-indigo-500" />
-              Minhas Contas
-            </h2>
-            {isExpanded && <p className="text-xs text-slate-500 dark:text-slate-400">Gerencie seus bancos, cartões e vales.</p>}
+    <>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden animate-fade-in transition-all">
+        {/* Header Bar matching Metas & Orçamentos */}
+        <div className={`px-4 md:px-6 py-3.5 bg-slate-50/70 dark:bg-slate-900/40 ${isExpanded ? 'border-b border-slate-100 dark:border-slate-700/60' : ''} flex items-center justify-between`}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <Landmark className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                Minhas Contas
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                  {wallets.length} conta{wallets.length !== 1 ? 's' : ''}
+                </span>
+              </h3>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {!isFormOpen && isExpanded && (
+              <button
+                onClick={() => setIsFormOpen(true)}
+                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                title="Cadastrar nova conta ou cartão"
+              >
+                <Plus className="w-3.5 h-3.5" /> Nova Conta
+              </button>
+            )}
+            <button 
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              title={isExpanded ? "Ocultar contas" : "Expandir contas"}
+            >
+              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
           </div>
         </div>
-        {!isFormOpen && isExpanded && (
-          <button
-            onClick={() => setIsFormOpen(true)}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-bold text-xs"
-          >
-            <Plus className="w-3 h-3" /> Nova Conta
-          </button>
-        )}
-      </div>
 
-      {isExpanded && (
-        <>
+        {isExpanded && (
+          <div className="p-4 md:p-6 space-y-6">
           {isFormOpen && (
             <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/60 backdrop-blur-sm">
               <div className="flex min-h-full items-center justify-center p-4">
@@ -887,7 +898,7 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
         </div>
       )}
 
-      {isExpanded && !isFormOpen && (
+      {!isFormOpen && (
         <div className="mb-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
           <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-slate-100 dark:divide-slate-700">
             <div className="p-4 md:p-5 flex items-center gap-4">
@@ -1110,8 +1121,9 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
           </button>
         </div>
       )}
-        </>
-      )}
+          </div>
+        )}
+      </div>
 
       {/* Transfer Modal */}
       {isTransferModalOpen && (
@@ -1968,6 +1980,6 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };

@@ -150,15 +150,20 @@ const getTransactionImpact = (t: Transaction): number => {
 
 // Helper para exibir erros do Firestore
 const handleFirestoreError = (error: any, message: string) => {
-    console.error(message, error);
-    if (error.code === 'permission-denied') {
+    const errorDetails = error instanceof Error 
+      ? { name: error.name, message: error.message, code: (error as any).code } 
+      : (typeof error === 'object' && error !== null 
+          ? { message: error.message || String(error), code: error.code } 
+          : String(error));
+    console.error(message, errorDetails);
+    if (error?.code === 'permission-denied') {
         toast.error("Acesso negado: Verifique as configurações do seu banco de dados no Firebase.", {
             description: "Certifique-se de que o Firestore está em modo de teste ou com as regras de segurança configuradas.",
             duration: 10000,
         });
     } else {
         toast.error(`Erro no banco de dados: ${message}`, {
-            description: error.message || "Erro desconhecido",
+            description: error?.message || "Erro desconhecido",
         });
     }
 };

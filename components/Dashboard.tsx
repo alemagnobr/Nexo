@@ -212,13 +212,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
     
-    // Unique categories present in budgets
-    const budgetCategories = Array.from(new Set<string>(data.budgets.map((b: Budget) => b.category)));
+    const expenseBudgets = data.budgets.filter(b => (b.type || 'expense') === 'expense');
+    const budgetCategories = Array.from(new Set<string>(expenseBudgets.map((b: Budget) => b.category)));
 
     // Only check if before the 25th to be a useful "mid-month" warning
     if (today.getDate() <= 25) {
         budgetCategories.forEach(cat => {
-            const budget = getEffectiveBudget(data.budgets, cat, today);
+            const budget = getEffectiveBudget(expenseBudgets, cat, today);
             if (!budget) return;
 
             const spent = data.transactions
@@ -246,8 +246,43 @@ export const Dashboard: React.FC<DashboardProps> = ({
         });
     }
 
+    // Alerta das metas de investimento (quanto falta para o teto de aportes do mês)
+    const investmentBudgets = data.budgets.filter(b => b.type === 'investment');
+    const monthStr = today.toISOString().slice(0, 7);
+    investmentBudgets.forEach(invBudget => {
+        const isRelevant = (invBudget.isRecurring && !investmentBudgets.some(b => b.category === invBudget.category && b.month === monthStr && !b.isRecurring)) || invBudget.month === monthStr;
+        if (!isRelevant) return;
+
+        let totalInvested = 0;
+        if (invBudget.targetInvestmentId && invBudget.targetInvestmentId !== 'ALL') {
+            const targetInv = data.investments?.find(i => i.id === invBudget.targetInvestmentId);
+            if (targetInv && targetInv.history) {
+                totalInvested = targetInv.history
+                    .filter(h => h.type === 'contribution' && new Date(h.date).getMonth() === currentMonth && new Date(h.date).getFullYear() === currentYear)
+                    .reduce((s, h) => s + h.amount, 0);
+            }
+        } else {
+            totalInvested = (data.investments || []).reduce((sum, inv) => {
+                if (!inv.history) return sum;
+                const contribs = inv.history
+                    .filter(h => h.type === 'contribution' && new Date(h.date).getMonth() === currentMonth && new Date(h.date).getFullYear() === currentYear)
+                    .reduce((s, h) => s + h.amount, 0);
+                return sum + contribs;
+            }, 0);
+        }
+
+        const remaining = invBudget.limit - totalInvested;
+        if (remaining > 0) {
+            alerts.push({
+                title: `Meta de Aporte: ${invBudget.category}`,
+                message: `Faltam R$ ${remaining.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para bater seu teto de investimento este mês.`,
+                type: 'info'
+            });
+        }
+    });
+
     return alerts;
-  }, [data.budgets, data.transactions]);
+  }, [data.budgets, data.transactions, data.investments]);
 
   // --- NOTES WIDGET LOGIC ---
   const pinnedNotes = useMemo(() => {

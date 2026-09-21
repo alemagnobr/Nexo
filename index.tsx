@@ -3,6 +3,46 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
+// Global console sanitizer to prevent circular structure errors during telemetry/logging
+const wrapConsoleMethod = (method: 'log' | 'warn' | 'error' | 'info') => {
+  const original = console[method];
+  console[method] = (...args: any[]) => {
+    const safeArgs = args.map(arg => {
+      if (arg && typeof arg === 'object') {
+        if (arg instanceof Error) {
+          return { name: arg.name, message: arg.message, stack: arg.stack };
+        }
+        try {
+          const seen = new WeakSet();
+          JSON.stringify(arg, (key, value) => {
+            if (typeof value === 'object' && value !== null) {
+              if (seen.has(value)) return '[Circular]';
+              seen.add(value);
+            }
+            return value;
+          });
+          return arg;
+        } catch {
+          try {
+            return {
+              message: (arg as any).message || (arg as any).description || String(arg),
+              code: (arg as any).code,
+              name: (arg as any).name || (arg as any).constructor?.name || 'Object'
+            };
+          } catch {
+            return String(arg);
+          }
+        }
+      }
+      return arg;
+    });
+    original.apply(console, safeArgs);
+  };
+};
+
+wrapConsoleMethod('error');
+wrapConsoleMethod('warn');
+
 // Register Service Worker for PWA capabilities
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

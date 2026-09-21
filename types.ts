@@ -92,6 +92,8 @@ export interface Budget {
   limit: number;
   month?: string; // Formato "YYYY-MM" (opcional se for recorrente)
   isRecurring: boolean; // Se true, aplica-se a qualquer mês que não tenha um budget específico
+  type?: 'expense' | 'investment'; // 'expense' (limite de gastos) ou 'investment' (meta de aportes)
+  targetInvestmentId?: string; // ID opcional do investimento/caixinha específico ou 'ALL'
 }
 
 export interface Debt {
@@ -813,6 +815,7 @@ export interface SportsBettingConfig {
   protectionPercentage: number; // % do Lucro líquido travado e guardado no cofre de proteção (ex: 30%)
   protectionInvestmentId?: string; // ID do investimento de destino (Caixinha, Ação, FII) onde a proteção será investida
   minimumStake?: number; // Valor mínimo por entrada (R$, opcional)
+  stopLossPercentage?: number; // Limite de Stop Loss móvel do projeto (% da maior banca ativa histórica)
   stopLossDaily?: number; // Limite de perda diária opcional
   stopGainDaily?: number; // Limite de ganho diário opcional
   strategyName?: string; // Nome da estratégia / Gestão de Banca

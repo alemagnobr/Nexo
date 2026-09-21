@@ -146,6 +146,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
             categories={data.categories}
             budgets={data.budgets}
             wallets={data.wallets}
+            investments={data.investments}
             onAdd={actions.addTransaction}
             onUpdate={actions.updateTransaction}
             onDelete={actions.deleteTransaction}

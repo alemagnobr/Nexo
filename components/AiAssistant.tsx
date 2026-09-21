@@ -35,7 +35,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ data, privacyMode }) =
         };
 
         recognitionRef.current.onerror = (event: any) => {
-            console.error('Speech error', event);
+            console.error('Speech error', event?.error || 'recognition_failed');
             setIsListening(false);
         };
         

@@ -44,6 +44,7 @@ interface SportsBettingProjectModalProps {
     protectionPercentage: number;
     protectionInvestmentId?: string;
     minimumStake?: number;
+    stopLossPercentage?: number;
     stopLossDaily?: number;
     stopGainDaily?: number;
     notes?: string;
@@ -75,6 +76,7 @@ export const SportsBettingProjectModal: React.FC<SportsBettingProjectModalProps>
   const [compoundPercentage, setCompoundPercentage] = useState(70);
   const [protectionPercentage, setProtectionPercentage] = useState(30);
   const [protectionInvestmentId, setProtectionInvestmentId] = useState('');
+  const [stopLossPercentage, setStopLossPercentage] = useState('');
   const [stopLossDaily, setStopLossDaily] = useState('');
   const [stopGainDaily, setStopGainDaily] = useState('');
   const [notes, setNotes] = useState('');
@@ -101,6 +103,7 @@ export const SportsBettingProjectModal: React.FC<SportsBettingProjectModalProps>
         setCompoundPercentage(editingProject.config?.compoundPercentage ?? 70);
         setProtectionPercentage(editingProject.config?.protectionPercentage ?? 30);
         setProtectionInvestmentId(editingProject.config?.protectionInvestmentId || '');
+        setStopLossPercentage(editingProject.config?.stopLossPercentage ? String(editingProject.config.stopLossPercentage) : '');
         setStopLossDaily(editingProject.config?.stopLossDaily ? String(editingProject.config.stopLossDaily) : '');
         setStopGainDaily(editingProject.config?.stopGainDaily ? String(editingProject.config.stopGainDaily) : '');
         setNotes(editingProject.config?.notes || '');
@@ -120,6 +123,7 @@ export const SportsBettingProjectModal: React.FC<SportsBettingProjectModalProps>
         setCompoundPercentage(70);
         setProtectionPercentage(30);
         setProtectionInvestmentId('');
+        setStopLossPercentage('50');
         setStopLossDaily('');
         setStopGainDaily('');
         setNotes('Estratégia balanceada com reinvestimento inteligente e reserva de segurança.');
@@ -177,6 +181,7 @@ export const SportsBettingProjectModal: React.FC<SportsBettingProjectModalProps>
       protectionPercentage,
       protectionInvestmentId: protectionInvestmentId || undefined,
       minimumStake: 0,
+      stopLossPercentage: stopLossPercentage ? parseFloat(stopLossPercentage) : undefined,
       stopLossDaily: stopLossDaily ? parseFloat(stopLossDaily) : undefined,
       stopGainDaily: stopGainDaily ? parseFloat(stopGainDaily) : undefined,
       notes: notes.trim(),
@@ -467,6 +472,42 @@ export const SportsBettingProjectModal: React.FC<SportsBettingProjectModalProps>
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Stop Loss Móvel do Projeto */}
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-rose-500" />
+                  Stop Loss do Projeto (% da Maior Banca)
+                </label>
+                {stopLossPercentage && parseFloat(stopLossPercentage) > 0 && (
+                  <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-500 border border-rose-500/20">
+                    Limite: {stopLossPercentage}% do topo
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="any"
+                  min="1"
+                  max="99"
+                  value={stopLossPercentage}
+                  onChange={(e) => setStopLossPercentage(e.target.value)}
+                  placeholder="Ex: 50 (50% de rebaixamento da maior banca)"
+                  className="w-full pl-3.5 pr-12 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-medium"
+                />
+                <span className="absolute right-3.5 top-2.5 text-xs text-slate-400 font-bold">%</span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                <strong>Stop Loss Móvel (Trailing):</strong> O corte de risco segue sempre a <strong>maior banca ativa histórica</strong> alcançada. Se a banca cresce, o piso de segurança sobe proporcionalmente e nunca regride.
+                {numInitial > 0 && parseFloat(stopLossPercentage) > 0 && (
+                  <span className="block mt-1 text-slate-700 dark:text-slate-300">
+                    🎯 <em>Com a banca inicial de R$ {numInitial.toFixed(2)}, o piso de corte começa em <strong>R$ {Math.max(0, numInitial * (1 - (parseFloat(stopLossPercentage) || 0) / 100)).toFixed(2)}</strong>. Ao subir a banca, o piso acompanhará o novo topo.</em>
+                  </span>
+                )}
+              </p>
             </div>
 
             {/* Regras complementares (Stop Loss / Stop Gain diários) */}

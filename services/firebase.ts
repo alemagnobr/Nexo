@@ -13,6 +13,7 @@ export const auth = getAuth(app);
 // Exporta o banco de dados (Firestore) com o ID correto e ignoreUndefinedProperties habilitado
 const databaseId = (firebaseConfig as any).firestoreDatabaseId || "(default)";
 export const db = initializeFirestore(app, {
-    ignoreUndefinedProperties: true
+    ignoreUndefinedProperties: true,
+    experimentalForceLongPolling: true,
 }, databaseId);
 

@@ -309,6 +309,9 @@ export const FinancialCalendar: React.FC<FinancialCalendarProps> = ({
     // Let's show alerts based on "Real Time" status like dashboard
 
     budgets.forEach((budget) => {
+      // Ignora metas de investimento nos alertas de limite excedido
+      if (budget.type === 'investment') return;
+
       // Find if this budget applies to current real month
       const isRelevant =
         (budget.isRecurring &&
@@ -316,7 +319,8 @@ export const FinancialCalendar: React.FC<FinancialCalendarProps> = ({
             (b) =>
               b.category === budget.category &&
               b.month === monthStr &&
-              !b.isRecurring,
+              !b.isRecurring &&
+              (b.type || 'expense') === 'expense',
           )) ||
         budget.month === monthStr;
 

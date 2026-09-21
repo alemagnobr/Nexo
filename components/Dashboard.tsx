@@ -1,7 +1,25 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { AppData, Badge, Budget, View, WalletType } from '../types';
-import { Wallet, TrendingUp, AlertCircle, Target, Download, Trophy, CheckCheck, Layers, Crown, TrendingDown, Calendar, BarChart3, ShieldAlert, BadgeAlert, Scale, ArrowRight, ArrowLeft, Settings2, CalendarClock, DollarSign, PieChart as PieChartIcon, ChevronDown, Bell, X, Activity, Clock, ArrowDownCircle, StickyNote, CheckCircle2, Circle, Grid, Edit2, Timer, Play, Dumbbell, Apple, Key, ShoppingCart, KeyRound, QrCode, FileText, CheckSquare, CreditCard, Briefcase, Receipt, Repeat, LineChart, Landmark, Package, Sparkles, MessageSquareMore, Settings, LayoutDashboard } from 'lucide-react';
+import { Wallet, TrendingUp, AlertCircle, Target, Download, Trophy, CheckCheck, Layers, Crown, TrendingDown, Calendar, BarChart3, ShieldAlert, BadgeAlert, Scale, ArrowRight, ArrowLeft, Settings2, CalendarClock, DollarSign, PieChart as PieChartIcon, ChevronDown, ChevronUp, Bell, X, Activity, Clock, ArrowDownCircle, StickyNote, CheckCircle2, Circle, Grid, Edit2, Timer, Play, Dumbbell, Apple, Key, ShoppingCart, KeyRound, QrCode, FileText, CheckSquare, CreditCard, Briefcase, Receipt, Repeat, LineChart, Landmark, Package, Sparkles, MessageSquareMore, Settings, LayoutDashboard, Sliders, Plus } from 'lucide-react';
+import { 
+  AVAILABLE_WIDGETS, 
+  DEFAULT_ACTIVE_WIDGET_IDS, 
+  DashboardCustomizerModal,
+  FinanceiroWidget,
+  HabitosWidget,
+  TarefasWidget,
+  ComprasWidget,
+  EstoqueWidget,
+  AgendaWidget,
+  MetasTrabalhoWidget,
+  SonhosWidget,
+  NotasWidget,
+  CartoesWidget,
+  InvestimentosWidget,
+  DividasWidget,
+  TreinoWidget
+} from './DashboardWidgets';
 
 interface DashboardProps {
   data: AppData;
@@ -129,6 +147,59 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onToggleHabitEntry,
 }) => {
   const [activeAppCategory, setActiveAppCategory] = useState<string>('todos');
+  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
+  const [showAllApps, setShowAllApps] = useState(false);
+
+  const [activeWidgets, setActiveWidgets] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('nexo_dashboard_active_widgets_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Erro ao carregar widgets salvos:', e);
+    }
+    return DEFAULT_ACTIVE_WIDGET_IDS;
+  });
+
+  const handleToggleWidget = (id: string) => {
+    setActiveWidgets(prev => {
+      let updated: string[];
+      if (prev.includes(id)) {
+        updated = prev.filter(wId => wId !== id);
+      } else {
+        updated = [...prev, id];
+      }
+      try {
+        localStorage.setItem('nexo_dashboard_active_widgets_v1', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Erro ao persistir widgets:', e);
+      }
+      return updated;
+    });
+  };
+
+  const handleRemoveWidget = (id: string) => {
+    setActiveWidgets(prev => {
+      const updated = prev.filter(wId => wId !== id);
+      try {
+        localStorage.setItem('nexo_dashboard_active_widgets_v1', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Erro ao persistir widgets:', e);
+      }
+      return updated;
+    });
+  };
+
+  const handleResetWidgets = () => {
+    setActiveWidgets(DEFAULT_ACTIVE_WIDGET_IDS);
+    try {
+      localStorage.setItem('nexo_dashboard_active_widgets_v1', JSON.stringify(DEFAULT_ACTIVE_WIDGET_IDS));
+    } catch (e) {
+      console.error('Erro ao restaurar widgets padrões:', e);
+    }
+  };
 
   const ALL_APPS = useMemo(() => [
     // Financeiro
@@ -752,14 +823,170 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
       </div>
 
-      {/* --- MEUS APLICATIVOS --- */}
-      <div className="space-y-4 pt-2">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div>
-                  <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Meus Aplicativos</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Acesso rápido a todos os módulos do NEXO Smart Life Planner.</p>
-              </div>
+      {/* --- PAINEL MODULAR & CUSTOMIZÁVEL DE CARDS --- */}
+      <div className="space-y-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <span>Meu Painel Modular</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300">
+                  {activeWidgets.length} ativos
+                </span>
+              </h2>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Escolha quais cards exibir e acompanhe em tempo real o que está rolando no seu dia a dia.
+            </p>
+          </div>
 
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsCustomizerOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-sm shadow-indigo-600/20 transition-all flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Adicionar Card</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsCustomizerOpen(true)}
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-indigo-400 hover:text-indigo-600 transition-colors cursor-pointer"
+              title="Personalizar cards do painel"
+            >
+              <Sliders className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Grid de Widgets */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {activeWidgets.map(widgetId => {
+            const isFull = widgetId === 'financeiro_resumo';
+            const widgetProps = {
+              data,
+              privacyMode,
+              onNavigate,
+              onRemove: () => handleRemoveWidget(widgetId),
+              onToggleHabitEntry,
+              formatValue
+            };
+
+            let content: React.ReactNode = null;
+            switch (widgetId) {
+              case 'financeiro_resumo':
+                content = <FinanceiroWidget {...widgetProps} />;
+                break;
+              case 'habitos':
+                content = <HabitosWidget {...widgetProps} />;
+                break;
+              case 'tarefas':
+                content = <TarefasWidget {...widgetProps} />;
+                break;
+              case 'compras':
+                content = <ComprasWidget {...widgetProps} />;
+                break;
+              case 'estoque':
+                content = <EstoqueWidget {...widgetProps} />;
+                break;
+              case 'agenda':
+                content = <AgendaWidget {...widgetProps} />;
+                break;
+              case 'metas_trabalho':
+                content = <MetasTrabalhoWidget {...widgetProps} />;
+                break;
+              case 'sonhos':
+                content = <SonhosWidget {...widgetProps} />;
+                break;
+              case 'notas':
+                content = <NotasWidget {...widgetProps} />;
+                break;
+              case 'cartoes':
+                content = <CartoesWidget {...widgetProps} />;
+                break;
+              case 'investimentos':
+                content = <InvestimentosWidget {...widgetProps} />;
+                break;
+              case 'dividas':
+                content = <DividasWidget {...widgetProps} />;
+                break;
+              case 'treino':
+                content = <TreinoWidget {...widgetProps} />;
+                break;
+              default:
+                content = null;
+            }
+
+            if (!content) return null;
+
+            return (
+              <div key={widgetId} className={isFull ? 'md:col-span-2' : ''}>
+                {content}
+              </div>
+            );
+          })}
+
+          {/* Card Pontilhado com botão + */}
+          <button
+            type="button"
+            onClick={() => setIsCustomizerOpen(true)}
+            className="min-h-[160px] p-6 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700/80 hover:border-indigo-500 dark:hover:border-indigo-400 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-all flex flex-col items-center justify-center text-center group cursor-pointer"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-center text-indigo-600 dark:text-indigo-400 group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition-all mb-2.5">
+              <Plus className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+              + Adicionar Card ao Painel
+            </span>
+            <span className="text-[11px] text-slate-400 mt-0.5">
+              {AVAILABLE_WIDGETS.length - activeWidgets.length > 0 
+                ? `${AVAILABLE_WIDGETS.length - activeWidgets.length} outros módulos disponíveis para adicionar`
+                : 'Todos os módulos já estão ativos no painel'}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* --- MEUS APLICATIVOS (TODOS OS 23 MÓDULOS) --- */}
+      <div className="pt-4 border-t border-slate-200 dark:border-slate-800/80 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAllApps(!showAllApps)}
+                className="flex items-center gap-2 group cursor-pointer text-left"
+              >
+                  <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-950/60 transition-colors">
+                      <Grid className="w-4 h-4 text-slate-500 group-hover:text-indigo-600 dark:text-slate-400" />
+                  </div>
+                  <div>
+                      <div className="flex items-center gap-2">
+                          <h2 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                              Todos os Aplicativos ({ALL_APPS.length})
+                          </h2>
+                          <span className="text-[10px] text-slate-400 font-normal">
+                            {showAllApps ? 'Clique para recolher' : 'Clique para ver atalhos diretos'}
+                          </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">Navegue diretamente para qualquer tela do NEXO</p>
+                  </div>
+              </button>
+
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setShowAllApps(!showAllApps)}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:text-indigo-600 transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>{showAllApps ? 'Ocultar Atalhos' : 'Mostrar Atalhos'}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${showAllApps ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+          </div>
+          
+          {showAllApps && (
+            <div className="space-y-4 pt-1 animate-fade-in">
               {/* Filter Tabs */}
               <div className="flex items-center gap-1 overflow-x-auto no-scrollbar p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700/60 text-xs">
                   {[
@@ -787,26 +1014,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       </button>
                   ))}
               </div>
-          </div>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {filteredApps.map(app => (
-                  <div 
-                      key={app.id} 
-                      onClick={() => onNavigate(app.id as View)}
-                      className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/80 cursor-pointer hover:shadow-md hover:border-indigo-500/50 dark:hover:border-indigo-500/50 transition-all flex items-center gap-3 group"
-                  >
-                      <div className={`p-2.5 rounded-xl ${app.iconBg} group-hover:scale-110 transition-transform shrink-0`}>
-                          <app.icon className="w-4 h-4" />
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                  {filteredApps.map(app => (
+                      <div 
+                          key={app.id} 
+                          onClick={() => onNavigate(app.id as View)}
+                          className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/80 cursor-pointer hover:shadow-md hover:border-indigo-500/50 dark:hover:border-indigo-500/50 transition-all flex items-center gap-3 group"
+                      >
+                          <div className={`p-2.5 rounded-xl ${app.iconBg} group-hover:scale-110 transition-transform shrink-0`}>
+                              <app.icon className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-slate-800 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{app.label}</p>
+                              <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 truncate">{app.desc}</p>
+                          </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-800 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{app.label}</p>
-                          <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 truncate">{app.desc}</p>
-                      </div>
-                  </div>
-              ))}
-          </div>
+                  ))}
+              </div>
+            </div>
+          )}
       </div>
+
+      {/* Modal de Customização de Cards */}
+      <DashboardCustomizerModal
+        isOpen={isCustomizerOpen}
+        onClose={() => setIsCustomizerOpen(false)}
+        activeWidgetIds={activeWidgets}
+        onToggleWidget={handleToggleWidget}
+        onResetToDefault={handleResetWidgets}
+      />
     </div>
   );
 };

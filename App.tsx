@@ -415,11 +415,7 @@ const App: React.FC = () => {
           onUnlockBadge={actions.unlockBadge}
           onNavigate={(view) => setCurrentView(view)}
           onToggleHabitEntry={actions.toggleHabitEntry}
-          
-          
-          
-          
-          
+          onSync={actions.syncDashboardData}
         />
       );
     }

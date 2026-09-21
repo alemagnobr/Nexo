@@ -11,6 +11,7 @@ import {
   onSnapshot, 
   query, 
   getDocs,
+  getDoc,
   writeBatch,
   runTransaction,
   limit,
@@ -401,12 +402,69 @@ export const subscribeToData = (uid: string, onUpdate: (data: Partial<AppData>) 
     unsubFinancialChallenges();
     unsubDailyRoutines();
     unsubWallets();
+    unsubWorkProjects();
     unsubWorkGoals();
     unsubWorkoutProjects();
     unsubWorkoutRoutines();
     unsubCategories();
     unsubUserDoc();
   };
+};
+
+// 1.1 FETCH DIRETO PARA FORÇAR SINCRONIZAÇÃO INSTANTÂNEA
+export const fetchFreshDataFire = async (uid: string): Promise<Partial<AppData>> => {
+  const result: Partial<AppData> = {};
+  try {
+    const [
+      workGoalsSnap,
+      workProjectsSnap,
+      transactionsSnap,
+      budgetsSnap,
+      debtsSnap,
+      investmentsSnap,
+      habitsSnap,
+      agendaSnap,
+      notesSnap,
+      inventorySnap,
+      walletsSnap,
+      userDocSnap
+    ] = await Promise.all([
+      getDocs(collection(db, 'users', uid, 'workGoals')),
+      getDocs(collection(db, 'users', uid, 'workProjects')),
+      getDocs(query(collection(db, 'users', uid, 'transactions'), orderBy('date', 'desc'), limit(300))),
+      getDocs(collection(db, 'users', uid, 'budgets')),
+      getDocs(collection(db, 'users', uid, 'debts')),
+      getDocs(collection(db, 'users', uid, 'investments')),
+      getDocs(query(collection(db, 'users', uid, 'habits'), orderBy('createdAt', 'asc'))),
+      getDocs(query(collection(db, 'users', uid, 'agenda_events'), orderBy('startDate', 'asc'))),
+      getDocs(query(collection(db, 'users', uid, 'notes'), orderBy('date', 'desc'))),
+      getDocs(collection(db, 'users', uid, 'inventory')),
+      getDocs(collection(db, 'users', uid, 'wallets')),
+      getDoc(doc(db, 'users', uid))
+    ]);
+
+    result.workGoals = workGoalsSnap.docs.map(d => d.data() as WorkGoal);
+    result.workProjects = workProjectsSnap.docs.map(d => d.data() as WorkProject);
+    result.transactions = transactionsSnap.docs.map(d => d.data() as Transaction);
+    result.budgets = budgetsSnap.docs.map(d => d.data() as Budget);
+    result.debts = debtsSnap.docs.map(d => d.data() as Debt);
+    result.investments = investmentsSnap.docs.map(d => d.data() as Investment);
+    result.habits = habitsSnap.docs.map(d => d.data() as Habit);
+    result.agendaEvents = agendaSnap.docs.map(d => d.data() as AgendaEvent);
+    result.notes = notesSnap.docs.map(d => d.data() as Note);
+    result.inventoryList = inventorySnap.docs.map(d => d.data() as InventoryItem);
+    result.wallets = walletsSnap.docs.map(d => d.data() as Wallet);
+
+    if (userDocSnap.exists()) {
+      const uData = userDocSnap.data();
+      if (uData.walletBalance !== undefined) result.walletBalance = uData.walletBalance;
+      if (uData.unlockedBadges) result.unlockedBadges = uData.unlockedBadges;
+      if (uData.wealthProfile) result.wealthProfile = uData.wealthProfile;
+    }
+  } catch (err) {
+    console.warn("Erro no fetchFreshDataFire:", err);
+  }
+  return result;
 };
 
 // 2. WRITERS (Escrita Atômica com Atualização de Saldo)

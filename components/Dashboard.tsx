@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { AppData, Badge, Budget, View, WalletType } from '../types';
-import { Wallet, TrendingUp, AlertCircle, Target, Download, Trophy, CheckCheck, Layers, Crown, TrendingDown, Calendar, BarChart3, ShieldAlert, BadgeAlert, Scale, ArrowRight, ArrowLeft, Settings2, CalendarClock, DollarSign, PieChart as PieChartIcon, ChevronDown, ChevronUp, Bell, X, Activity, Clock, ArrowDownCircle, StickyNote, CheckCircle2, Circle, Grid, Edit2, Timer, Play, Dumbbell, Apple, Key, ShoppingCart, KeyRound, QrCode, FileText, CheckSquare, CreditCard, Briefcase, Receipt, Repeat, LineChart, Landmark, Package, Sparkles, MessageSquareMore, Settings, LayoutDashboard, Sliders, Plus } from 'lucide-react';
+import { Wallet, TrendingUp, AlertCircle, Target, Download, Trophy, CheckCheck, Layers, Crown, TrendingDown, Calendar, BarChart3, ShieldAlert, BadgeAlert, Scale, ArrowRight, ArrowLeft, Settings2, CalendarClock, DollarSign, PieChart as PieChartIcon, ChevronDown, ChevronUp, Bell, X, Activity, Clock, ArrowDownCircle, StickyNote, CheckCircle2, Circle, Grid, Edit2, Timer, Play, Dumbbell, Apple, Key, ShoppingCart, KeyRound, QrCode, FileText, CheckSquare, CreditCard, Briefcase, Receipt, Repeat, LineChart, Landmark, Package, Sparkles, MessageSquareMore, Settings, LayoutDashboard, Sliders, Plus, RefreshCw, GripVertical } from 'lucide-react';
 import { 
   AVAILABLE_WIDGETS, 
   DEFAULT_ACTIVE_WIDGET_IDS, 
@@ -27,6 +27,7 @@ interface DashboardProps {
   onUnlockBadge: (id: string) => void;
   onNavigate: (view: View) => void;
   onToggleHabitEntry: (id: string, dayIndex: number, status: 'done' | 'missed', dateStr: string) => void;
+  onSync?: () => Promise<void>;
 }
 
 const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
@@ -145,10 +146,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onUnlockBadge, 
   onNavigate, 
   onToggleHabitEntry,
+  onSync,
 }) => {
   const [activeAppCategory, setActiveAppCategory] = useState<string>('todos');
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
   const [showAllApps, setShowAllApps] = useState(false);
+
+  // Sincronização automática com banco de dados
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>('Sincronizado');
+
+  const triggerSync = async () => {
+    if (!onSync || isSyncing) return;
+    setIsSyncing(true);
+    try {
+      await onSync();
+      const now = new Date();
+      setLastSyncTime(`Atualizado às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+    } catch (e) {
+      console.error('Erro na sincronização:', e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    triggerSync();
+  }, []);
 
   const [activeWidgets, setActiveWidgets] = useState<string[]>(() => {
     try {
@@ -162,6 +186,77 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
     return DEFAULT_ACTIVE_WIDGET_IDS;
   });
+
+  // Drag and drop states
+  const [draggedWidgetId, setDraggedWidgetId] = useState<string | null>(null);
+  const [dragOverWidgetId, setDragOverWidgetId] = useState<string | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedWidgetId(id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverWidgetId !== id) {
+      setDragOverWidgetId(id);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedWidgetId(null);
+    setDragOverWidgetId(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedWidgetId || draggedWidgetId === targetId) {
+      setDraggedWidgetId(null);
+      setDragOverWidgetId(null);
+      return;
+    }
+
+    setActiveWidgets(prev => {
+      const sourceIndex = prev.indexOf(draggedWidgetId);
+      const targetIndex = prev.indexOf(targetId);
+      if (sourceIndex === -1 || targetIndex === -1) return prev;
+
+      const updated = [...prev];
+      updated.splice(sourceIndex, 1);
+      updated.splice(targetIndex, 0, draggedWidgetId);
+      try {
+        localStorage.setItem('nexo_dashboard_active_widgets_v1', JSON.stringify(updated));
+      } catch (err) {
+        console.error('Erro ao salvar nova ordem dos widgets:', err);
+      }
+      return updated;
+    });
+
+    setDraggedWidgetId(null);
+    setDragOverWidgetId(null);
+  };
+
+  const handleMoveWidget = (id: string, direction: 'up' | 'down') => {
+    setActiveWidgets(prev => {
+      const index = prev.indexOf(id);
+      if (index === -1) return prev;
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+
+      const updated = [...prev];
+      const temp = updated[index];
+      updated[index] = updated[targetIndex];
+      updated[targetIndex] = temp;
+      try {
+        localStorage.setItem('nexo_dashboard_active_widgets_v1', JSON.stringify(updated));
+      } catch (err) {
+        console.error('Erro ao salvar ordem dos widgets:', err);
+      }
+      return updated;
+    });
+  };
 
   const handleToggleWidget = (id: string) => {
     setActiveWidgets(prev => {
@@ -836,11 +931,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </h2>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Escolha quais cards exibir e acompanhe em tempo real o que está rolando no seu dia a dia.
+              Arraste os cards para posicionar onde desejar ou use os controles para reordenar.
             </p>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {onSync && (
+              <button
+                type="button"
+                onClick={triggerSync}
+                disabled={isSyncing}
+                className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-300 dark:hover:border-indigo-500/50 text-xs font-semibold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                title="Sincronizar com o banco de dados agora"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`} />
+                <span className="hidden sm:inline">{isSyncing ? 'Sincronizando...' : lastSyncTime}</span>
+                <span className="sm:hidden">{isSyncing ? '...' : 'Sincronizar'}</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setIsCustomizerOpen(true)}
@@ -861,9 +970,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        {/* Grid de Widgets */}
+        {/* Grid de Widgets com Suporte a Drag & Drop */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {activeWidgets.map(widgetId => {
+          {activeWidgets.map((widgetId, index) => {
             const isFull = widgetId === 'financeiro_resumo';
             const widgetProps = {
               data,
@@ -921,8 +1030,65 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             if (!content) return null;
 
+            const isDragging = draggedWidgetId === widgetId;
+            const isOver = dragOverWidgetId === widgetId && draggedWidgetId !== widgetId;
+
             return (
-              <div key={widgetId} className={isFull ? 'md:col-span-2' : ''}>
+              <div
+                key={widgetId}
+                draggable
+                onDragStart={(e) => handleDragStart(e, widgetId)}
+                onDragOver={(e) => handleDragOver(e, widgetId)}
+                onDragEnd={handleDragEnd}
+                onDrop={(e) => handleDrop(e, widgetId)}
+                className={`relative group transition-all duration-200 ${
+                  isFull ? 'md:col-span-2' : ''
+                } ${
+                  isDragging
+                    ? 'opacity-40 scale-[0.98] border-2 border-dashed border-indigo-400 rounded-2xl'
+                    : ''
+                } ${
+                  isOver
+                    ? 'ring-2 ring-indigo-500 rounded-2xl shadow-lg scale-[1.01]'
+                    : ''
+                }`}
+              >
+                {/* Alça visual de arraste e botões de reordenação rápida */}
+                <div className="absolute top-4 right-16 z-10 flex items-center gap-0.5 bg-slate-100/90 dark:bg-slate-700/90 backdrop-blur-xs px-1.5 py-0.5 rounded-lg border border-slate-200/80 dark:border-slate-600/80 opacity-60 group-hover:opacity-100 transition-opacity shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMoveWidget(widgetId, 'up');
+                    }}
+                    disabled={index === 0}
+                    className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-20 cursor-pointer transition-colors"
+                    title="Mover para cima / trás"
+                  >
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  </button>
+
+                  <div
+                    className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center"
+                    title="Arraste para posicionar onde desejar"
+                  >
+                    <GripVertical className="w-3.5 h-3.5" />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMoveWidget(widgetId, 'down');
+                    }}
+                    disabled={index === activeWidgets.length - 1}
+                    className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-20 cursor-pointer transition-colors"
+                    title="Mover para baixo / frente"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
                 {content}
               </div>
             );
@@ -1043,6 +1209,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         activeWidgetIds={activeWidgets}
         onToggleWidget={handleToggleWidget}
         onResetToDefault={handleResetWidgets}
+        onMoveWidget={handleMoveWidget}
       />
     </div>
   );

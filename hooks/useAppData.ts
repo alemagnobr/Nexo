@@ -113,6 +113,8 @@ import {
   saveDriveLinkFire,
   subscribeToData,
   recalculateBalanceFire,
+  fetchFreshDataFire,
+  loadData,
   DEFAULT_CATEGORIES,
 } from "../services/storageService";
 
@@ -1802,11 +1804,45 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
   const deleteWorkProject = async (id: string) => {
     if (user) {
       await deleteWorkProjectFire(user.uid, id);
+      const orphaned = (data.workGoals || []).filter((g) => g.projectId === id);
+      for (const g of orphaned) {
+        await deleteWorkGoalFire(user.uid, g.id);
+      }
     } else {
       setData((prev) => ({
         ...prev,
         workProjects: (prev.workProjects || []).filter((p) => p.id !== id),
+        workGoals: (prev.workGoals || []).filter((g) => g.projectId !== id),
       }));
+    }
+  };
+
+  const syncDashboardData = async () => {
+    try {
+      if (user && !isGuest) {
+        const fresh = await fetchFreshDataFire(user.uid);
+        if (fresh && Object.keys(fresh).length > 0) {
+          setData((prev) => {
+            const nextProjects = fresh.workProjects ?? prev.workProjects ?? [];
+            const projectIds = new Set(nextProjects.map((p) => p.id));
+            const rawGoals = fresh.workGoals ?? prev.workGoals ?? [];
+            const cleanedGoals = rawGoals.filter(
+              (g) => !g.projectId || projectIds.has(g.projectId)
+            );
+
+            return {
+              ...prev,
+              ...fresh,
+              workGoals: cleanedGoals,
+            };
+          });
+        }
+      } else {
+        const local = loadData();
+        setData((prev) => ({ ...prev, ...local }));
+      }
+    } catch (e) {
+      console.error("Erro ao sincronizar dados do Dashboard:", e);
     }
   };
 
@@ -2036,6 +2072,7 @@ export const useAppData = (user: User | null, isGuest: boolean) => {
       unlockBadge,
       saveWealthProfile,
       setDriveLink,
+      syncDashboardData,
     },
   };
 };

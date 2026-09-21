@@ -839,7 +839,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                       draggable={!isTouchDevice && editingColumn?.id !== col.id}
                       onDragStart={(e) => handleColDragStart(e, col.id)}
                       onDragEnd={handleColDragEnd}
-                      className={`w-80 md:w-[420px] flex flex-col rounded-xl border backdrop-blur-sm transition-colors ${theme.wrapper} ${draggedCard && draggedCard.sourceColId !== col.id ? 'opacity-50 border-dashed' : 'shadow-sm'} ${draggedColumnId === col.id ? 'opacity-30 border-dashed' : ''}`}
+                      className={`w-72 sm:w-80 md:w-[310px] lg:w-[320px] flex-shrink-0 flex flex-col rounded-xl border backdrop-blur-sm transition-colors ${theme.wrapper} ${draggedCard && draggedCard.sourceColId !== col.id ? 'opacity-50 border-dashed' : 'shadow-sm'} ${draggedColumnId === col.id ? 'opacity-30 border-dashed' : ''}`}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleColDrop(e, col.id)}
                   >

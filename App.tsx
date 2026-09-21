@@ -759,11 +759,11 @@ const App: React.FC = () => {
           {renderContent()}
         </div>
 
-        {/* Botão Flutuante de Voltar ao Topo */}
+        {/* Botão Flutuante de Voltar ao Topo (posicionado acima do botão de ação flutuante para não sobrepor) */}
         {showScrollTop && (
           <button
             onClick={scrollToTop}
-            className="fixed bottom-6 right-6 z-40 p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-lg shadow-indigo-600/30 transition-all duration-300 transform hover:scale-110 active:scale-95 flex items-center justify-center border border-indigo-400/30 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="fixed bottom-36 right-5 md:bottom-24 md:right-9 z-30 w-11 h-11 bg-slate-900/90 hover:bg-slate-800 dark:bg-slate-700/95 dark:hover:bg-slate-600 text-white rounded-full shadow-xl shadow-slate-900/20 border border-slate-700/40 dark:border-slate-500/40 backdrop-blur-sm transition-all duration-300 transform hover:scale-110 active:scale-95 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
             title="Voltar ao topo da tela"
             aria-label="Voltar ao topo"
           >

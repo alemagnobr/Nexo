@@ -1054,7 +1054,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 }`}
               >
                 {/* Alça visual de arraste e botões de reordenação rápida */}
-                <div className="absolute top-4 right-16 z-10 flex items-center gap-0.5 bg-slate-100/90 dark:bg-slate-700/90 backdrop-blur-xs px-1.5 py-0.5 rounded-lg border border-slate-200/80 dark:border-slate-600/80 opacity-60 group-hover:opacity-100 transition-opacity shadow-2xs">
+                <div className="absolute top-4 right-20 sm:right-22 z-10 flex items-center gap-0.5 bg-slate-100/90 dark:bg-slate-700/90 backdrop-blur-xs px-1.5 py-0.5 rounded-lg border border-slate-200/80 dark:border-slate-600/80 opacity-40 group-hover:opacity-100 transition-opacity shadow-2xs">
                   <button
                     type="button"
                     onClick={(e) => {

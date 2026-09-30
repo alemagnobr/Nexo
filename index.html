@@ -14,6 +14,42 @@
     <!-- PWA Manifest - Caminho Relativo -->
     <link rel="manifest" href="./manifest.json" />
     
+    <!-- Robust Circular Structure JSON.stringify & Console Protection -->
+    <script>
+      (function() {
+        try {
+          var originalStringify = JSON.stringify;
+          JSON.stringify = function(value, replacer, space) {
+            try {
+              return originalStringify(value, replacer, space);
+            } catch (err) {
+              try {
+                var seen = new WeakSet();
+                var safeReplacer = function(key, val) {
+                  var currentVal = val;
+                  if (typeof replacer === 'function') {
+                    currentVal = replacer.call(this, key, val);
+                  }
+                  if (typeof currentVal === 'object' && currentVal !== null) {
+                    if (seen.has(currentVal)) {
+                      return '[Circular]';
+                    }
+                    seen.add(currentVal);
+                  }
+                  return currentVal;
+                };
+                return originalStringify(value, safeReplacer, space);
+              } catch (fallbackErr) {
+                return '"{}"';
+              }
+            }
+          };
+        } catch (e) {
+          // ignore
+        }
+      })();
+    </script>
+    
     <!-- Mobile Drag and Drop Polyfill -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0-rc.2/default.css">
     <script src="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0-rc.2/index.min.js"></script>

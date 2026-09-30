@@ -151,11 +151,30 @@ const getTransactionImpact = (t: Transaction): number => {
 
 // Helper para exibir erros do Firestore
 const handleFirestoreError = (error: any, message: string) => {
+    const code = error?.code || (error instanceof Error ? (error as any).code : undefined);
+    const errMessage = error?.message || (error instanceof Error ? error.message : String(error));
+
+    // Transient network/offline errors should not spam UI toasts because Firestore SDK operates in offline cache mode
+    const isTransientOffline = 
+        code === 'unavailable' || 
+        code === 'deadline-exceeded' || 
+        (typeof errMessage === 'string' && (
+            errMessage.includes("Could not reach Cloud Firestore backend") ||
+            errMessage.includes("client will operate in offline mode") ||
+            errMessage.includes("network")
+        ));
+
     const errorDetails = error instanceof Error 
       ? { name: error.name, message: error.message, code: (error as any).code } 
       : (typeof error === 'object' && error !== null 
           ? { message: error.message || String(error), code: error.code } 
           : String(error));
+
+    if (isTransientOffline) {
+        console.warn(`${message} (Firestore operando em modo offline / reconectando):`, errorDetails);
+        return;
+    }
+
     console.error(message, errorDetails);
     if (error?.code === 'permission-denied') {
         toast.error("Acesso negado: Verifique as configurações do seu banco de dados no Firebase.", {

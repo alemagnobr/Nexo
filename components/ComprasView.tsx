@@ -168,12 +168,14 @@ export const ComprasView: React.FC<ComprasViewProps> = ({
              onDelete={actions.deleteInventoryItem}
              onAddReplenishmentLog={actions.addReplenishmentLog}
              onClearReplenishmentHistory={actions.clearReplenishmentHistory}
-             onAddToShoppingList={(item) => {
+             onAddToShoppingList={(item: any) => {
                  actions.addShoppingItem({
                      name: item.name,
                      quantity: item.quantity,
                      unit: item.unit,
                      category: item.category,
+                     referencePrice: item.estimatedPrice || item.referencePrice,
+                     estimatedPrice: item.estimatedPrice || item.referencePrice,
                      actualPrice: 0,
                      isChecked: false,
                      observation: 'Auto-gerado para reposição de estoque',

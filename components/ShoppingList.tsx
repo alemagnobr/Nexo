@@ -27,7 +27,11 @@ import {
   Edit2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronsUpDown,
+  ChevronsDownUp,
   Calendar,
+  Clock,
   History,
   Copy,
   Search,
@@ -133,14 +137,39 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
 
   // Estoque automations when checking items
   const [pendingStockItem, setPendingStockItem] = useState<ShoppingItem | null>(null);
+  const [checkoutQuantity, setCheckoutQuantity] = useState<number>(1);
+  const [checkoutUnitPrice, setCheckoutUnitPrice] = useState<string>("");
   const [isStockModalOpen, setIsStockModalOpen] = useState(false);
   const [stockItemName, setStockItemName] = useState("");
   const [stockItemQuantity, setStockItemQuantity] = useState<number>(1);
   const [stockItemUnit, setStockItemUnit] = useState("un");
   const [stockItemCategory, setStockItemCategory] = useState<ShoppingCategory>("Outros");
   const [stockItemMinQuantity, setStockItemMinQuantity] = useState<number>(1);
+  const [stockItemReferencePrice, setStockItemReferencePrice] = useState<number | string>("");
   const [stockItemPersistedMonths, setStockItemPersistedMonths] = useState<number>(0);
   const [stockToastMessage, setStockToastMessage] = useState<string | null>(null);
+
+  // Collapsible categories state
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+
+  const toggleCollapseCategory = (category: string) => {
+    setCollapsedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
+
+  const collapseAllCategories = () => {
+    const all: Record<string, boolean> = {};
+    activeCategories.forEach(cat => {
+      all[cat] = true;
+    });
+    setCollapsedCategories(all);
+  };
+
+  const expandAllCategories = () => {
+    setCollapsedCategories({});
+  };
 
   useEffect(() => {
     if (stockToastMessage) {
@@ -152,48 +181,117 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
   }, [stockToastMessage]);
 
   const handleToggleCheck = (item: ShoppingItem) => {
-    const willBeChecked = !item.isChecked;
-    onUpdate(item.id, { isChecked: willBeChecked });
-    if (willBeChecked) {
-      setPendingStockItem(item);
+    // Se o item já está 100% concluído (isChecked && !isPartial), clicar no check desmarca
+    if (item.isChecked && !item.isPartial) {
+      onUpdate(item.id, { 
+        isChecked: false, 
+        isPartial: false, 
+        purchasedQuantity: 0 
+      });
+      return;
+    }
+
+    // Se é um item não marcado OU com compra parcial, abrimos o diálogo de confirmação
+    setPendingStockItem(item);
+
+    if (item.isPartial) {
+      // Sugere a quantidade que ainda falta para completar
+      const already = item.purchasedQuantity || 0;
+      const remaining = Math.max(1, item.quantity - already);
+      setCheckoutQuantity(remaining);
+    } else {
+      // Sugere a quantidade planejada
+      setCheckoutQuantity(item.quantity || 1);
+    }
+
+    const price = item.actualPrice > 0 
+      ? item.actualPrice 
+      : (item.referencePrice || 0);
+    setCheckoutUnitPrice(price > 0 ? String(price) : "");
+  };
+
+  const handleConfirmStockLaunch = async (launchToStock: boolean = true) => {
+    if (!pendingStockItem) return;
+
+    const qtyToBuy = Math.max(0.01, Number(checkoutQuantity) || 1);
+    const unitPrice = checkoutUnitPrice ? parseFloat(checkoutUnitPrice) || 0 : (pendingStockItem.actualPrice || pendingStockItem.referencePrice || 0);
+    
+    const previousPurchased = pendingStockItem.isPartial ? (pendingStockItem.purchasedQuantity || 0) : 0;
+    const totalPurchased = previousPurchased + qtyToBuy;
+    const targetQty = pendingStockItem.quantity;
+
+    const isFullyPurchased = totalPurchased >= targetQty;
+    const isPartialPurchase = !isFullyPurchased;
+
+    // Atualiza o item na lista de compras
+    onUpdate(pendingStockItem.id, {
+      isChecked: true,
+      isPartial: isPartialPurchase,
+      purchasedQuantity: totalPurchased,
+      actualPrice: unitPrice > 0 ? unitPrice : pendingStockItem.actualPrice,
+    });
+
+    if (launchToStock) {
+      const existingInvItem = inventoryList.find(
+        (inv) => inv.name.trim().toLowerCase() === pendingStockItem.name.trim().toLowerCase()
+      );
+
+      if (existingInvItem) {
+        // Se o produto já existe no estoque, soma com a quantidade realmente comprada nesta etapa (qtyToBuy)
+        const newStockQty = Number(existingInvItem.quantity || 0) + qtyToBuy;
+        const updates: Partial<InventoryItem> = { quantity: newStockQty };
+        if (unitPrice > 0) {
+          updates.referencePrice = unitPrice;
+        }
+
+        if (onUpdateInventoryItem) {
+          await onUpdateInventoryItem(existingInvItem.id, updates);
+        }
+        if (onAddReplenishmentLog) {
+          await onAddReplenishmentLog({
+            itemName: existingInvItem.name,
+            quantityAdded: qtyToBuy,
+            unit: existingInvItem.unit || pendingStockItem.unit || "un",
+            category: existingInvItem.category || pendingStockItem.category || "Outros",
+            date: new Date().toISOString(),
+            type: "purchase",
+          });
+        }
+        setStockToastMessage(
+          `Estoque de "${existingInvItem.name}" atualizado: +${qtyToBuy} ${existingInvItem.unit || "un"} (Total: ${newStockQty})!`
+        );
+        setPendingStockItem(null);
+      } else {
+        // Se não tem no estoque, abre o modal de cadastro com os dados e a quantidade comprada
+        setStockItemName(pendingStockItem.name);
+        setStockItemQuantity(qtyToBuy);
+        setStockItemUnit(pendingStockItem.unit || "un");
+        setStockItemCategory((pendingStockItem.category as ShoppingCategory) || "Outros");
+        setStockItemMinQuantity(1);
+        setStockItemReferencePrice(unitPrice > 0 ? unitPrice : "");
+        setStockItemPersistedMonths(0);
+        setPendingStockItem(null);
+        setIsStockModalOpen(true);
+      }
+    } else {
+      setStockToastMessage(
+        isPartialPurchase
+          ? `Compra parcial registrada: ${totalPurchased}/${targetQty} ${pendingStockItem.unit || "un"} (Falta ${targetQty - totalPurchased})!`
+          : `"${pendingStockItem.name}" marcado como comprado!`
+      );
+      setPendingStockItem(null);
     }
   };
 
-  const handleConfirmStockLaunch = async () => {
+  const handleUncheckPendingItem = () => {
     if (!pendingStockItem) return;
-    const existingInvItem = inventoryList.find(
-      (inv) => inv.name.trim().toLowerCase() === pendingStockItem.name.trim().toLowerCase()
-    );
-
-    if (existingInvItem) {
-      // "Se o produto já existe e tem em estoque ele soma a quantidade com o que tem."
-      const newQty = Number(existingInvItem.quantity || 0) + Number(pendingStockItem.quantity || 1);
-      if (onUpdateInventoryItem) {
-        await onUpdateInventoryItem(existingInvItem.id, { quantity: newQty });
-      }
-      if (onAddReplenishmentLog) {
-        await onAddReplenishmentLog({
-          itemName: existingInvItem.name,
-          quantityAdded: Number(pendingStockItem.quantity || 1),
-          unit: existingInvItem.unit || pendingStockItem.unit || "un",
-          category: existingInvItem.category || pendingStockItem.category || "Outros",
-          date: new Date().toISOString(),
-          type: "purchase",
-        });
-      }
-      setStockToastMessage(`Estoque de "${existingInvItem.name}" somado: agora há ${newQty} ${existingInvItem.unit || "un"}!`);
-      setPendingStockItem(null);
-    } else {
-      // "Se não tem produto cadastrado após o check ele abre a mesma caixa que ele abre quando vou cadastrar um estoque mas com as informações cadastradas e eu só complemento o q falta."
-      setStockItemName(pendingStockItem.name);
-      setStockItemQuantity(Number(pendingStockItem.quantity || 1));
-      setStockItemUnit(pendingStockItem.unit || "un");
-      setStockItemCategory((pendingStockItem.category as ShoppingCategory) || "Outros");
-      setStockItemMinQuantity(1);
-      setStockItemPersistedMonths(0);
-      setPendingStockItem(null);
-      setIsStockModalOpen(true);
-    }
+    onUpdate(pendingStockItem.id, {
+      isChecked: false,
+      isPartial: false,
+      purchasedQuantity: 0,
+    });
+    setPendingStockItem(null);
+    setStockToastMessage(`Item "${pendingStockItem.name}" desmarcado.`);
   };
 
   const handleStockFormSubmit = async (e: React.FormEvent) => {
@@ -202,6 +300,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
 
     const qty = Number(stockItemQuantity);
     const minQty = Number(stockItemMinQuantity);
+    const refPrice = stockItemReferencePrice !== "" && !isNaN(Number(stockItemReferencePrice)) && Number(stockItemReferencePrice) > 0 ? Number(stockItemReferencePrice) : undefined;
 
     if (onAddInventoryItem) {
       await onAddInventoryItem({
@@ -210,6 +309,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
         unit: stockItemUnit,
         category: stockItemCategory,
         minQuantity: minQty,
+        referencePrice: refPrice,
         persistedMonthsCount: Number(stockItemPersistedMonths),
       });
     }
@@ -379,6 +479,12 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
 
   const forecastTotal = useMemo(() => {
     return monthItems.reduce((acc, item) => {
+      if (item.isPartial) {
+        const purchased = item.purchasedQuantity || 0;
+        const remaining = Math.max(0, item.quantity - purchased);
+        const ref = item.referencePrice || item.actualPrice || 0;
+        return acc + (purchased * item.actualPrice) + (remaining * ref);
+      }
       const itemPrice = item.isChecked
         ? item.actualPrice
         : item.referencePrice || item.actualPrice || 0;
@@ -388,13 +494,20 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
 
   const spentTotal = useMemo(() => {
     return monthItems.reduce((acc, item) => {
-      return acc + (item.isChecked ? item.actualPrice * item.quantity : 0);
+      if (!item.isChecked) return acc;
+      const qty = item.isPartial ? (item.purchasedQuantity || 0) : item.quantity;
+      return acc + (item.actualPrice * qty);
     }, 0);
   }, [monthItems]);
 
   const remainingForecast = useMemo(() => {
     return monthItems.reduce((acc, item) => {
-      if (item.isChecked) return acc;
+      if (item.isChecked && !item.isPartial) return acc;
+      if (item.isPartial) {
+        const remaining = Math.max(0, item.quantity - (item.purchasedQuantity || 0));
+        const ref = item.referencePrice || item.actualPrice || 0;
+        return acc + (ref * remaining);
+      }
       const itemPrice = item.referencePrice || item.actualPrice || 0;
       return acc + itemPrice * item.quantity;
     }, 0);
@@ -427,7 +540,8 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
         if (!dates[item.purchaseDate]) {
           dates[item.purchaseDate] = { total: 0, items: [] };
         }
-        dates[item.purchaseDate].total += item.actualPrice * item.quantity;
+        const effectiveQty = item.isPartial ? (item.purchasedQuantity || 0) : item.quantity;
+        dates[item.purchaseDate].total += item.actualPrice * effectiveQty;
         dates[item.purchaseDate].items.push(item);
       }
     });
@@ -1639,27 +1753,55 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
         </div>
       )}
 
-      {/* Categoria Anchors */}
+      {/* Categoria Anchors & Expandir / Recolher Todas */}
       {activeTab === "list" && filteredItems.length > 0 && (
-        <div className="flex overflow-x-auto no-scrollbar gap-2 mb-4 bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm sticky top-[72px] z-20">
-          <span className="text-xs font-bold text-slate-500 uppercase flex items-center pr-2 border-r border-slate-200 dark:border-slate-700">
-            Ir para
-          </span>
-          {activeCategories.filter((c) => groupedItems[c]?.length > 0).map(
-            (cat) => (
-              <button
-                key={cat}
-                onClick={() =>
-                  document
-                    .getElementById(`cat-${cat}`)
-                    ?.scrollIntoView({ behavior: "smooth" })
-                }
-                className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-lg text-xs font-bold whitespace-nowrap transition-colors"
-              >
-                {cat}
-              </button>
-            ),
-          )}
+        <div className="flex items-center justify-between gap-3 mb-4 bg-white dark:bg-slate-800 p-2.5 sm:p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm sticky top-[72px] z-20">
+          <div className="flex items-center overflow-x-auto no-scrollbar gap-2 flex-1 min-w-0">
+            <span className="text-xs font-bold text-slate-500 uppercase flex items-center pr-2 border-r border-slate-200 dark:border-slate-700 shrink-0">
+              Ir para
+            </span>
+            {activeCategories.filter((c) => groupedItems[c]?.length > 0).map(
+              (cat) => (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    if (collapsedCategories[cat]) {
+                      setCollapsedCategories(prev => ({ ...prev, [cat]: false }));
+                    }
+                    setTimeout(() => {
+                      document
+                        .getElementById(`cat-${cat}`)
+                        ?.scrollIntoView({ behavior: "smooth" });
+                    }, 50);
+                  }}
+                  className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-lg text-xs font-bold whitespace-nowrap transition-colors shrink-0"
+                >
+                  {cat}
+                </button>
+              ),
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0 pl-2 border-l border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={expandAllCategories}
+              title="Expandir todas as categorias"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg transition-colors cursor-pointer"
+            >
+              <ChevronsUpDown className="w-3.5 h-3.5 text-indigo-500" />
+              <span className="hidden sm:inline">Expandir Tudo</span>
+            </button>
+            <button
+              type="button"
+              onClick={collapseAllCategories}
+              title="Recolher todas as categorias"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+            >
+              <ChevronsDownUp className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden sm:inline">Recolher Tudo</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -1733,30 +1875,67 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                         </span>
                       </div>
                       <div className="flex flex-col border-t border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700 mt-2">
-                        {item.items.map((product) => (
+                        {item.items.map((product) => {
+                          const isProductPartial = !!product.isPartial;
+                          const partialPurchased = product.purchasedQuantity || 0;
+                          const partialRemaining = Math.max(0, product.quantity - partialPurchased);
+
+                          return (
                           <div
                             key={product.id}
-                            className={`py-4 flex flex-col sm:flex-row sm:items-center gap-4 transition-colors ${product.isChecked ? "bg-slate-50/50 dark:bg-slate-700/30" : ""}`}
+                            className={`py-4 px-3 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-4 transition-all ${
+                              isProductPartial
+                                ? "bg-amber-50/80 dark:bg-amber-950/30 border-2 border-amber-400 dark:border-amber-500/80 shadow-sm shadow-amber-500/10"
+                                : product.isChecked
+                                ? "bg-slate-50/50 dark:bg-slate-700/30 border border-transparent"
+                                : "border border-transparent"
+                            }`}
                           >
                             {/* Check & Name */}
                             <div className="flex items-center gap-3 flex-1 min-w-0">
                               <button
                                 onClick={() => handleToggleCheck(product)}
-                                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${
-                                  product.isChecked
+                                title={
+                                  isProductPartial
+                                    ? `Compra Parcial: ${partialPurchased}/${product.quantity} ${product.unit || "un"}. Clique para completar a compra (Falta ${partialRemaining}) ou ajustar.`
+                                    : product.isChecked
+                                    ? "Desmarcar item"
+                                    : "Marcar compra do item"
+                                }
+                                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 cursor-pointer ${
+                                  isProductPartial
+                                    ? "bg-amber-500 border-amber-500 text-white shadow-sm shadow-amber-500/30 ring-2 ring-amber-400/40"
+                                    : product.isChecked
                                     ? "bg-emerald-500 border-emerald-500 text-white"
                                     : "border-slate-300 dark:border-slate-500 text-transparent hover:border-emerald-400"
                                 }`}
                               >
-                                <Check className="w-4 h-4" />
+                                {isProductPartial ? (
+                                  <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
+                                ) : (
+                                  <Check className="w-4 h-4" />
+                                )}
                               </button>
                               <div className="flex flex-col min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span
-                                    className={`font-medium text-lg truncate ${product.isChecked ? "text-slate-400 line-through" : "text-slate-700 dark:text-slate-200"}`}
+                                    className={`font-medium text-lg truncate ${
+                                      isProductPartial
+                                        ? "text-slate-800 dark:text-slate-100 font-bold"
+                                        : product.isChecked
+                                        ? "text-slate-400 line-through"
+                                        : "text-slate-700 dark:text-slate-200"
+                                    }`}
                                   >
                                     {product.name}
                                   </span>
+                                  {isProductPartial && (
+                                    <span className="text-[10px] font-extrabold uppercase tracking-wide bg-amber-500 text-white px-2 py-0.5 rounded-md flex items-center gap-1 shadow-xs">
+                                      <Clock className="w-3 h-3" />
+                                      <span>Parcial: {partialPurchased}/{product.quantity} {product.unit || "un"}</span>
+                                      <span className="font-black text-amber-100">(Falta {partialRemaining})</span>
+                                    </span>
+                                  )}
                                   {product.brand && (
                                     <span className="text-[11px] font-bold uppercase tracking-wide bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-200/60 dark:border-indigo-800/60">
                                       {product.brand}
@@ -1836,15 +2015,27 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                                     }`}
                                   />
                                 </div>
-                                {product.quantity > 1 &&
-                                  product.actualPrice > 0 && (
-                                    <span className="text-[10px] text-slate-400 font-medium mt-1">
-                                      Subtotal:{" "}
-                                      {formatValue(
-                                        product.quantity * product.actualPrice,
-                                      )}
-                                    </span>
-                                  )}
+                                {product.actualPrice > 0 && (
+                                  isProductPartial ? (
+                                    <div className="flex flex-col items-end text-right mt-1">
+                                      <span className="text-[11px] text-amber-700 dark:text-amber-400 font-extrabold">
+                                        Gasto Parcial: {formatValue(partialPurchased * product.actualPrice)}
+                                      </span>
+                                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                        Falta: {formatValue(partialRemaining * product.actualPrice)}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    product.quantity > 1 && (
+                                      <span className="text-[10px] text-slate-400 font-medium mt-1">
+                                        Subtotal:{" "}
+                                        {formatValue(
+                                          product.quantity * product.actualPrice,
+                                        )}
+                                      </span>
+                                    )
+                                  )
+                                )}
                               </div>
 
                               {/* Edit */}
@@ -1864,7 +2055,8 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                               </button>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
@@ -1902,26 +2094,55 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
             });
 
             const catForecastTotal = categoryItems.reduce((acc, item) => {
+              if (item.isPartial) {
+                const purchased = item.purchasedQuantity || 0;
+                const remaining = Math.max(0, item.quantity - purchased);
+                const ref = item.referencePrice || item.actualPrice || 0;
+                return acc + (purchased * item.actualPrice) + (remaining * ref);
+              }
               const itemPrice = item.referencePrice || item.actualPrice || 0;
               return acc + itemPrice * item.quantity;
             }, 0);
 
             const catSpentTotal = categoryItems.reduce((acc, item) => {
-              return (
-                acc + (item.isChecked ? item.actualPrice * item.quantity : 0)
-              );
+              if (!item.isChecked) return acc;
+              const qty = item.isPartial ? (item.purchasedQuantity || 0) : item.quantity;
+              return acc + (item.actualPrice * qty);
             }, 0);
+
+            const isCategoryCollapsed = !!collapsedCategories[category];
 
             return (
               <div
                 key={category}
                 id={`cat-${category}`}
-                className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden shrink-0 scroll-mt-24"
+                className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden shrink-0 scroll-mt-24 transition-all"
               >
-                <div className="bg-slate-50 dark:bg-slate-900/50 px-4 py-2 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center flex-wrap gap-2">
-                  <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                    <List className="w-3 h-3" /> {category}
-                  </h3>
+                <div 
+                  onClick={() => toggleCollapseCategory(category)}
+                  className="bg-slate-50 hover:bg-slate-100/90 dark:bg-slate-900/50 dark:hover:bg-slate-900/80 px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center flex-wrap gap-2 cursor-pointer select-none transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleCollapseCategory(category);
+                      }}
+                      title={isCategoryCollapsed ? `Expandir ${category}` : `Recolher ${category}`}
+                      className="p-1 rounded-lg text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                    >
+                      {isCategoryCollapsed ? (
+                        <ChevronRight className="w-4 h-4 text-indigo-500" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-indigo-500" />
+                      )}
+                    </button>
+                    <h3 className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                      <List className="w-3.5 h-3.5 text-indigo-500" /> {category}
+                    </h3>
+                  </div>
+
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded border border-indigo-100/50 dark:border-indigo-900/20">
                       Subtotal Estimado (Ref): {formatValue(catForecastTotal)}
@@ -1937,7 +2158,8 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                   </div>
                 </div>
 
-                <div className="divide-y divide-slate-100 dark:divide-slate-700 pb-2">
+                {!isCategoryCollapsed && (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-700 pb-2">
                   {sortedDates.map((dateKey) => (
                     <div key={dateKey} className="pt-2">
                       <div className="px-4 py-1 flex items-center gap-2">
@@ -1951,30 +2173,67 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                         </span>
                       </div>
                       <div className="flex flex-col">
-                        {groupedByDate[dateKey].map((item) => (
+                        {groupedByDate[dateKey].map((item) => {
+                          const isItemPartial = !!item.isPartial;
+                          const partialPurchased = item.purchasedQuantity || 0;
+                          const partialRemaining = Math.max(0, item.quantity - partialPurchased);
+
+                          return (
                           <div
                             key={item.id}
-                            className={`p-4 flex flex-col sm:flex-row sm:items-center gap-4 transition-colors ${item.isChecked ? "bg-slate-50/50 dark:bg-slate-700/30" : ""}`}
+                            className={`p-4 flex flex-col sm:flex-row sm:items-center gap-4 transition-all rounded-2xl ${
+                              isItemPartial
+                                ? "bg-amber-50/80 dark:bg-amber-950/30 border-2 border-amber-400 dark:border-amber-500/80 shadow-sm shadow-amber-500/10"
+                                : item.isChecked
+                                ? "bg-slate-50/50 dark:bg-slate-700/30 border border-transparent"
+                                : "border border-transparent hover:bg-slate-50/40 dark:hover:bg-slate-700/20"
+                            }`}
                           >
                             {/* Check & Name */}
                             <div className="flex items-center gap-3 flex-1 min-w-0">
                               <button
                                 onClick={() => handleToggleCheck(item)}
-                                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${
-                                  item.isChecked
+                                title={
+                                  isItemPartial
+                                    ? `Compra Parcial: ${partialPurchased}/${item.quantity} ${item.unit || "un"}. Clique para completar a compra (Falta ${partialRemaining}) ou ajustar.`
+                                    : item.isChecked
+                                    ? "Desmarcar item"
+                                    : "Marcar compra do item"
+                                }
+                                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 cursor-pointer ${
+                                  isItemPartial
+                                    ? "bg-amber-500 border-amber-500 text-white shadow-sm shadow-amber-500/30 ring-2 ring-amber-400/40"
+                                    : item.isChecked
                                     ? "bg-emerald-500 border-emerald-500 text-white"
                                     : "border-slate-300 dark:border-slate-500 text-transparent hover:border-emerald-400"
                                 }`}
                               >
-                                <Check className="w-4 h-4" />
+                                {isItemPartial ? (
+                                  <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
+                                ) : (
+                                  <Check className="w-4 h-4" />
+                                )}
                               </button>
                               <div className="flex flex-col min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span
-                                    className={`font-medium text-lg truncate ${item.isChecked ? "text-slate-400 line-through" : "text-slate-700 dark:text-slate-200"}`}
+                                    className={`font-medium text-lg truncate ${
+                                      isItemPartial
+                                        ? "text-slate-800 dark:text-slate-100 font-bold"
+                                        : item.isChecked
+                                        ? "text-slate-400 line-through"
+                                        : "text-slate-700 dark:text-slate-200"
+                                    }`}
                                   >
                                     {item.name}
                                   </span>
+                                  {isItemPartial && (
+                                    <span className="text-[10px] font-extrabold uppercase tracking-wide bg-amber-500 text-white px-2 py-0.5 rounded-md flex items-center gap-1 shadow-xs">
+                                      <Clock className="w-3 h-3" />
+                                      <span>Parcial: {partialPurchased}/{item.quantity} {item.unit || "un"}</span>
+                                      <span className="font-black text-amber-100">(Falta {partialRemaining})</span>
+                                    </span>
+                                  )}
                                   {item.brand && (
                                     <span className="text-[11px] font-bold uppercase tracking-wide bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-200/60 dark:border-indigo-800/60">
                                       {item.brand}
@@ -2109,13 +2368,26 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                                     }`}
                                   />
                                 </div>
-                                {item.quantity > 1 && item.actualPrice > 0 && (
-                                  <span className="text-[10px] text-slate-400 font-medium mt-1">
-                                    Subtotal:{" "}
-                                    {formatValue(
-                                      item.quantity * item.actualPrice,
-                                    )}
-                                  </span>
+                                {item.actualPrice > 0 && (
+                                  isItemPartial ? (
+                                    <div className="flex flex-col items-end text-right mt-1">
+                                      <span className="text-[11px] text-amber-700 dark:text-amber-400 font-extrabold">
+                                        Gasto Parcial: {formatValue(partialPurchased * item.actualPrice)}
+                                      </span>
+                                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                        Falta: {formatValue(partialRemaining * item.actualPrice)}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    item.quantity > 1 && (
+                                      <span className="text-[10px] text-slate-400 font-medium mt-1">
+                                        Subtotal:{" "}
+                                        {formatValue(
+                                          item.quantity * item.actualPrice,
+                                        )}
+                                      </span>
+                                    )
+                                  )
                                 )}
                               </div>
 
@@ -2136,13 +2408,15 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                               </button>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            );
+              )}
+            </div>
+          );
           })
         )}
       </div>
@@ -2161,43 +2435,201 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
         </div>
       )}
 
-      {/* Pergunta automática após o check: Lançar em estoque? */}
+      {/* Diálogo Inteligente de Confirmação de Compra & Estoque */}
       {pendingStockItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-sm overflow-hidden border border-slate-200 dark:border-slate-700 shadow-2xl animate-scale-up p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
-                <Package className="w-5 h-5" />
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700 shadow-2xl animate-scale-up p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700/60">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                  pendingStockItem.isPartial 
+                    ? "bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400" 
+                    : "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400"
+                }`}>
+                  {pendingStockItem.isPartial ? <Clock className="w-5 h-5" /> : <Package className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-800 dark:text-white">
+                    {pendingStockItem.isPartial ? "Completar Compra & Estoque" : "Registrar Compra do Item"}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Defina a quantidade adquirida e integre ao estoque
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-black text-slate-800 dark:text-white">
-                  Lançar em estoque?
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Integração automática com Estoque
-                </p>
-              </div>
-            </div>
-
-            <p className="text-sm text-slate-600 dark:text-slate-300 my-4">
-              Deseja lançar <strong className="text-slate-800 dark:text-white font-bold">"{pendingStockItem.name}"</strong> ({pendingStockItem.quantity} {pendingStockItem.unit || "un"}) na sua aba de Estoque?
-            </p>
-
-            <div className="flex gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setPendingStockItem(null)}
-                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-xs font-bold transition-colors cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg cursor-pointer"
               >
-                Não, apenas marcar
+                <X className="w-5 h-5" />
               </button>
-              <button
-                type="button"
-                onClick={handleConfirmStockLaunch}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors shadow-lg shadow-indigo-600/20 cursor-pointer"
-              >
-                Sim, lançar
-              </button>
+            </div>
+
+            {/* Informações do Item */}
+            <div className="bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-extrabold text-slate-800 dark:text-white">
+                  {pendingStockItem.name}
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full">
+                  {pendingStockItem.category || "Outros"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span>Quantidade planejada:</span>
+                <span className="font-bold text-slate-700 dark:text-slate-200">
+                  {pendingStockItem.quantity} {pendingStockItem.unit || "un"}
+                </span>
+              </div>
+              {pendingStockItem.isPartial && (
+                <div className="flex items-center justify-between text-xs text-amber-600 dark:text-amber-400 font-semibold pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                  <span>Já comprado antes:</span>
+                  <span>{pendingStockItem.purchasedQuantity || 0} {pendingStockItem.unit || "un"} (Faltavam {Math.max(0, pendingStockItem.quantity - (pendingStockItem.purchasedQuantity || 0))})</span>
+                </div>
+              )}
+            </div>
+
+            {/* Controle de Quantidade Comprada */}
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
+                Quantidade Comprada Agora ({pendingStockItem.unit || "un"}):
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCheckoutQuantity(prev => Math.max(1, prev - 1))}
+                  className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 flex items-center justify-center font-bold text-slate-700 dark:text-white transition-colors cursor-pointer"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <input
+                  type="number"
+                  step="any"
+                  min="0.01"
+                  value={checkoutQuantity}
+                  onChange={(e) => setCheckoutQuantity(parseFloat(e.target.value) || 0)}
+                  className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2 px-3 text-center text-lg font-black text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCheckoutQuantity(prev => prev + 1)}
+                  className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 flex items-center justify-center font-bold text-slate-700 dark:text-white transition-colors cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Preço Unitário & Prévia Financeira */}
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                  Preço Unitário (R$):
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">R$</span>
+                  <CurrencyInput
+                    placeholder="0,00"
+                    value={checkoutUnitPrice}
+                    onChangeValue={(val) => setCheckoutUnitPrice(val)}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2 pl-8 pr-2.5 text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                  Gasto Nesta Compra:
+                </label>
+                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2 px-3 text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center justify-between h-[34px]">
+                  <span>Total:</span>
+                  <span>
+                    {formatValue(
+                      (Number(checkoutQuantity) || 0) * (parseFloat(checkoutUnitPrice) || 0)
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Alerta de Status (Total vs Parcial) */}
+            {(() => {
+              const prev = pendingStockItem.isPartial ? (pendingStockItem.purchasedQuantity || 0) : 0;
+              const totalAfter = prev + (Number(checkoutQuantity) || 0);
+              const target = pendingStockItem.quantity;
+              const diff = target - totalAfter;
+
+              if (diff > 0) {
+                return (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 rounded-2xl flex items-start gap-2.5 text-xs">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="text-amber-800 dark:text-amber-300">
+                      <p className="font-bold">
+                        Compra Parcial: {totalAfter}/{target} {pendingStockItem.unit || "un"}
+                      </p>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-0.5 leading-snug">
+                        Faltará <b>{diff} {pendingStockItem.unit || "un"}</b> para completar. O card ficará destacado em âmbar e o check ativo para o saldo restante.
+                      </p>
+                    </div>
+                  </div>
+                );
+              } else if (diff === 0) {
+                return (
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl flex items-center gap-2.5 text-xs text-emerald-800 dark:text-emerald-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <div>
+                      <p className="font-bold">Compra 100% Finalizada</p>
+                      <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                        Todos os {target} {pendingStockItem.unit || "un"} foram comprados. O item será concluído.
+                      </p>
+                    </div>
+                  </div>
+                );
+              } else {
+                return (
+                  <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/50 rounded-2xl flex items-center gap-2.5 text-xs text-indigo-800 dark:text-indigo-300">
+                    <TrendingUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                    <div>
+                      <p className="font-bold">Compra com Excedente (+{Math.abs(diff)} {pendingStockItem.unit || "un"})</p>
+                      <p className="text-[11px] text-indigo-700 dark:text-indigo-400">
+                        Você comprou mais que a quantidade planejada. O item será finalizado e o total lançado no estoque.
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+            })()}
+
+            {/* Ações */}
+            <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleConfirmStockLaunch(false)}
+                  className="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Apenas Marcar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmStockLaunch(true)}
+                  className="flex-1 py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors shadow-lg shadow-indigo-600/20 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  Sim, Lançar no Estoque
+                </button>
+              </div>
+
+              {(pendingStockItem.isChecked || pendingStockItem.isPartial) && (
+                <button
+                  type="button"
+                  onClick={handleUncheckPendingItem}
+                  className="w-full py-2 text-[11px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors cursor-pointer text-center"
+                >
+                  Desmarcar / Resetar este item
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -2270,20 +2702,20 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <CategorySelector
-                    value={stockItemCategory}
-                    onChange={(cat) =>
-                      setStockItemCategory(cat as ShoppingCategory)
-                    }
-                    categories={activeCategories}
-                    onAddCategory={onAddShoppingCategory}
-                    onDeleteCategory={onDeleteShoppingCategory}
-                    compact
-                  />
-                </div>
+              <div>
+                <CategorySelector
+                  value={stockItemCategory}
+                  onChange={(cat) =>
+                    setStockItemCategory(cat as ShoppingCategory)
+                  }
+                  categories={activeCategories}
+                  onAddCategory={onAddShoppingCategory}
+                  onDeleteCategory={onDeleteShoppingCategory}
+                  compact
+                />
+              </div>
 
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 ml-1">
                     Mínimo para Reposição
@@ -2294,6 +2726,21 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
                     required
                     value={stockItemMinQuantity}
                     onChange={(e) => setStockItemMinQuantity(Number(e.target.value))}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 ml-1">
+                    Preço Referência (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Ex: 12.50"
+                    value={stockItemReferencePrice}
+                    onChange={(e) => setStockItemReferencePrice(e.target.value)}
                     className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>

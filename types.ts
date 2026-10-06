@@ -134,6 +134,8 @@ export interface ShoppingItem {
   actualPrice: number; // O valor que o usuário digita no mercado (calculadora)
   referencePrice?: number; // Previsão de custo
   isChecked: boolean; // Se já pegou o item
+  purchasedQuantity?: number; // Quantidade comprada até agora (para compras parciais)
+  isPartial?: boolean; // Se a compra foi parcial (ainda falta quantidade para completar)
   category?: ShoppingCategory; // Novo campo
   observation?: string; // Observação opcional
   month?: string; // Formato "YYYY-MM" para histórico mensal
@@ -157,6 +159,7 @@ export interface InventoryItem {
   unit: string;
   category: string;
   minQuantity?: number; // Quantidade ideal ou mínima para reposição
+  referencePrice?: number; // Preço de referência unitário (R$)
   isMandatory?: boolean; // Item obrigatório nas compras de estoque (sempre pelo menos +1)
   updatedAt?: string;
   firstAddedAt?: string;

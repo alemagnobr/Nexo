@@ -37,7 +37,7 @@ interface InventoryProps {
   onDelete: (id: string) => void;
   onAddReplenishmentLog: (log: Omit<ReplenishmentLog, 'id'>) => void;
   onClearReplenishmentHistory: () => void;
-  onAddToShoppingList: (item: { name: string; category: any; unit: string; quantity: number; month?: string }) => void;
+  onAddToShoppingList: (item: { name: string; category: any; unit: string; quantity: number; month?: string; estimatedPrice?: number; referencePrice?: number }) => void;
   onAddRegisteredProduct?: (product: Omit<RegisteredProduct, "id">) => Promise<any> | void;
   onUpdateRegisteredProduct?: (id: string, updates: Partial<RegisteredProduct>) => Promise<any> | void;
   onDeleteRegisteredProduct?: (id: string) => Promise<any> | void;
@@ -175,7 +175,9 @@ export const Inventory: React.FC<InventoryProps> = ({
             category: item.category as ShoppingCategory,
             unit: item.unit || 'un',
             quantity: toAdd,
-            month: selectedLaunchMonth
+            month: selectedLaunchMonth,
+            estimatedPrice: item.referencePrice,
+            referencePrice: item.referencePrice
           });
           addedCount++;
 
@@ -220,6 +222,7 @@ export const Inventory: React.FC<InventoryProps> = ({
   const [itemUnit, setItemUnit] = useState('un');
   const [itemCategory, setItemCategory] = useState<ShoppingCategory>('Outros');
   const [itemMinQuantity, setItemMinQuantity] = useState<number>(1);
+  const [itemReferencePrice, setItemReferencePrice] = useState<string>('');
   const [itemIsMandatory, setItemIsMandatory] = useState<boolean>(false);
   const [itemPersistedMonths, setItemPersistedMonths] = useState<number>(0);
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
@@ -257,10 +260,12 @@ export const Inventory: React.FC<InventoryProps> = ({
       try {
         const category = itemCategory || "Outros";
         const unit = itemUnit || "un";
+        const defPrice = itemReferencePrice !== '' && !isNaN(Number(itemReferencePrice)) ? Number(itemReferencePrice) : undefined;
         await onAddRegisteredProduct({
           name: trimmed,
           category,
           unit,
+          defaultPrice: defPrice
         });
       } catch (err) {
         console.error("Erro ao cadastrar produto no catálogo pelo estoque:", err);
@@ -273,6 +278,9 @@ export const Inventory: React.FC<InventoryProps> = ({
     setItemName(prod.name);
     if (prod.category) setItemCategory(prod.category as ShoppingCategory);
     if (prod.unit) setItemUnit(prod.unit);
+    if (prod.defaultPrice !== undefined && prod.defaultPrice > 0) {
+      setItemReferencePrice(String(prod.defaultPrice));
+    }
     setShowProductSuggestions(false);
   };
 
@@ -282,6 +290,7 @@ export const Inventory: React.FC<InventoryProps> = ({
     setItemUnit('un');
     setItemCategory('Outros');
     setItemMinQuantity(1);
+    setItemReferencePrice('');
     setItemIsMandatory(false);
     setItemPersistedMonths(0);
     setEditingItem(null);
@@ -300,6 +309,7 @@ export const Inventory: React.FC<InventoryProps> = ({
     setItemUnit(item.unit);
     setItemCategory(item.category as ShoppingCategory);
     setItemMinQuantity(item.minQuantity || 0);
+    setItemReferencePrice(item.referencePrice !== undefined && item.referencePrice !== null ? String(item.referencePrice) : '');
     setItemIsMandatory(!!item.isMandatory);
     setItemPersistedMonths(item.persistedMonthsCount || 0);
     setShowProductSuggestions(false);
@@ -312,6 +322,7 @@ export const Inventory: React.FC<InventoryProps> = ({
 
     const qty = Number(itemQuantity);
     const minQty = Number(itemMinQuantity);
+    const refPrice = itemReferencePrice !== '' && !isNaN(Number(itemReferencePrice)) ? Number(itemReferencePrice) : undefined;
 
     const itemData = {
       name: itemName.trim(),
@@ -319,6 +330,7 @@ export const Inventory: React.FC<InventoryProps> = ({
       unit: itemUnit,
       category: itemCategory,
       minQuantity: minQty,
+      referencePrice: refPrice,
       isMandatory: itemIsMandatory,
       persistedMonthsCount: Number(itemPersistedMonths)
     };
@@ -337,6 +349,7 @@ export const Inventory: React.FC<InventoryProps> = ({
           name: itemData.name,
           category: itemData.category,
           unit: itemData.unit,
+          defaultPrice: refPrice !== undefined ? refPrice : existingRegistered.defaultPrice
         });
       }
     } else if (onAddRegisteredProduct) {
@@ -344,6 +357,7 @@ export const Inventory: React.FC<InventoryProps> = ({
         name: itemData.name,
         category: itemData.category,
         unit: itemData.unit,
+        defaultPrice: refPrice
       });
     }
 
@@ -413,7 +427,9 @@ export const Inventory: React.FC<InventoryProps> = ({
       name: item.name,
       category: item.category,
       unit: item.unit,
-      quantity: qtyToAdd
+      quantity: qtyToAdd,
+      estimatedPrice: item.referencePrice,
+      referencePrice: item.referencePrice
     });
   };
 
@@ -454,6 +470,12 @@ export const Inventory: React.FC<InventoryProps> = ({
 
   const totalItems = items.length;
   const itemsLow = items.filter(item => item.minQuantity !== undefined && item.quantity < item.minQuantity).length;
+  const totalStockValue = useMemo(() => {
+    return items.reduce((acc, item) => {
+      const p = item.referencePrice || 0;
+      return acc + (item.quantity * p);
+    }, 0);
+  }, [items]);
 
   // Analysis / Recommendation Logic for adjusting next month's shopping quantities
   const getPlanningSuggestions = () => {
@@ -612,7 +634,7 @@ export const Inventory: React.FC<InventoryProps> = ({
       {activeTab === 'stock' && (
         <>
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-700/50 shadow-sm flex items-center gap-4">
               <div className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-3 rounded-xl">
                 <Package className="w-6 h-6" />
@@ -640,6 +662,18 @@ export const Inventory: React.FC<InventoryProps> = ({
               <div>
                 <span className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider block">Estoque Adequado</span>
                 <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">{totalItems - itemsLow}</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-700/50 shadow-sm flex items-center gap-4">
+              <div className="bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 p-3 rounded-xl">
+                <TrendingUp className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider block">Valor Estimado Estoque</span>
+                <span className="text-xl font-black text-slate-800 dark:text-white">
+                  {privacyMode ? 'R$ ••••••' : `R$ ${totalStockValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                </span>
               </div>
             </div>
           </div>
@@ -767,6 +801,17 @@ export const Inventory: React.FC<InventoryProps> = ({
                             {item.minQuantity ?? 0} {(item.unit || 'un').toUpperCase()}
                           </span>
                         </div>
+                        {item.referencePrice !== undefined && item.referencePrice > 0 && (
+                          <div className="flex justify-between text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                            <span>Preço Referência:</span>
+                            <span className="font-mono">
+                              {privacyMode ? 'R$ •••' : `R$ ${item.referencePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                              <span className="text-[9px] text-slate-400 font-normal ml-1">
+                                (Tot: {privacyMode ? '•••' : `R$ ${(item.quantity * item.referencePrice).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`})
+                              </span>
+                            </span>
+                          </div>
+                        )}
                         {item.isMandatory && (
                           <div className="flex justify-between text-[10px] text-amber-700 dark:text-amber-400 font-semibold">
                             <span>Regra de compra:</span>
@@ -1238,18 +1283,18 @@ export const Inventory: React.FC<InventoryProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <CategorySelector
-                    value={itemCategory}
-                    onChange={(cat) => setItemCategory(cat as ShoppingCategory)}
-                    categories={activeCategories}
-                    onAddCategory={onAddShoppingCategory}
-                    onDeleteCategory={onDeleteShoppingCategory}
-                    compact
-                  />
-                </div>
+              <div>
+                <CategorySelector
+                  value={itemCategory}
+                  onChange={(cat) => setItemCategory(cat as ShoppingCategory)}
+                  categories={activeCategories}
+                  onAddCategory={onAddShoppingCategory}
+                  onDeleteCategory={onDeleteShoppingCategory}
+                  compact
+                />
+              </div>
 
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 ml-1">Mínimo para Reposição</label>
                   <input
@@ -1258,6 +1303,19 @@ export const Inventory: React.FC<InventoryProps> = ({
                     required
                     value={itemMinQuantity}
                     onChange={(e) => setItemMinQuantity(Number(e.target.value))}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5 ml-1">Preço Referência (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Ex: 12.50"
+                    value={itemReferencePrice}
+                    onChange={(e) => setItemReferencePrice(e.target.value)}
                     className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>

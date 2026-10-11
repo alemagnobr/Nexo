@@ -1,6 +1,5 @@
 import React, { useRef, useState } from "react";
 import {
-  LayoutDashboard,
   Receipt,
   LineChart,
   Target,
@@ -39,6 +38,7 @@ import {
   Wrench,
   Link,
   Timer,
+  Clock,
   BrainCircuit,
   Cloud,
   ChevronDown,
@@ -50,6 +50,8 @@ import {
   Snowflake,
   Rocket,
   Trophy,
+  Lock,
+  QrCode,
 } from "lucide-react";
 import { View } from "../types";
 import { useFocus } from "../contexts/FocusContext";
@@ -118,20 +120,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { isActive, timeLeft, openModal, focusReason } = useFocus();
 
-  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
-    financeiro: false,
-    investimentos: false,
-    compras: false,
-    planejamento: false,
-    saude: false,
-  });
+  // Group Logic Helpers to determine active state
+  const isFinanceiroActive = [
+    View.FINANCEIRO_DASHBOARD,
+    View.TRANSACTIONS,
+    View.SUBSCRIPTIONS,
+    View.DEBTS,
+    View.BUDGETS,
+  ].includes(currentView);
+
+  const isInvestimentosActive = [
+    View.INVESTMENTS_DASHBOARD,
+    View.INVESTMENTS,
+    View.STOCKS_GROWTH,
+    View.SNOWBALL,
+    View.FINANCIAL_CHALLENGES,
+    View.WEALTH_PLANNER,
+  ].includes(currentView);
+  
+  const isComprasActive = [
+    View.SHOPPING_LIST,
+    View.INVENTORY,
+    View.KANBAN,
+  ].includes(currentView);
+
+  const isProductivityActive = [
+    View.PLANEJAMENTO_DASHBOARD,
+    View.PRODUCTIVITY,
+    View.WORK_GOALS,
+  ].includes(currentView);
+
+  const isSaudeActive = [
+    View.SAUDE_DASHBOARD,
+    View.TREINO
+  ].includes(currentView);
+
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
 
   const toggleMenu = (menu: string, defaultView?: View) => {
     setOpenMenus((prev) => {
-      const isOpen = prev[menu] ?? false;
+      const currentIsOpen = prev[menu] !== undefined 
+        ? prev[menu] 
+        : (menu === 'financeiro' ? isFinanceiroActive :
+           menu === 'investimentos' ? isInvestimentosActive :
+           menu === 'compras' ? isComprasActive :
+           menu === 'planejamento' ? isProductivityActive :
+           menu === 'saude' ? isSaudeActive : false);
       return {
         ...prev,
-        [menu]: !isOpen,
+        [menu]: !currentIsOpen,
       };
     });
     if (defaultView && currentView !== defaultView) {
@@ -173,44 +210,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
     </button>
   );
-
-  // Group Logic Helpers to determine active state
-  const isFinanceiroActive = [
-    View.FINANCEIRO_DASHBOARD,
-    View.TRANSACTIONS,
-    View.SUBSCRIPTIONS,
-    View.DEBTS,
-    View.BUDGETS,
-    View.PIX_KEYS,
-  ].includes(currentView);
-
-  const isInvestimentosActive = [
-    View.INVESTMENTS_DASHBOARD,
-    View.INVESTMENTS,
-    View.STOCKS_GROWTH,
-    View.SNOWBALL,
-    View.FINANCIAL_CHALLENGES,
-    View.WEALTH_PLANNER,
-    View.MERCADO_ESPORTIVO,
-  ].includes(currentView);
-  
-  const isComprasActive = [
-    View.SHOPPING_LIST,
-    View.INVENTORY,
-    View.KANBAN,
-  ].includes(currentView);
-
-  const isProductivityActive = [
-    View.PLANEJAMENTO_DASHBOARD,
-    View.NOTES,
-    View.PRODUCTIVITY,
-    View.WORK_GOALS,
-    View.PASSWORDS,
-  ].includes(currentView);
-  const isSaudeActive = [
-    View.SAUDE_DASHBOARD,
-    View.TREINO
-  ].includes(currentView);
 
   return (
     <nav
@@ -281,17 +280,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation Links */}
       <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col no-scrollbar space-y-1">
-        <p className="px-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 mt-2">
-          Visão Geral
-        </p>
-
-        <NavItem
-          active={currentView === View.DASHBOARD}
-          onClick={() => handleNavClick(View.DASHBOARD)}
-          icon={LayoutDashboard}
-          label="Dashboard Global"
-        />
-
         <NavItem
           active={currentView === View.CALENDAR}
           onClick={() => handleNavClick(View.CALENDAR)}
@@ -323,65 +311,69 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
 
           {(openMenus.financeiro ?? isFinanceiroActive) && (
-            <div className="pl-4 space-y-1 py-1 border-l-2 border-blue-500/30 ml-4">
+            <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950/40 rounded-xl border border-slate-800/60 my-1 animate-fade-in">
+              {/* 1. Transações */}
               <button
                 onClick={() => handleNavClick(View.TRANSACTIONS)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.TRANSACTIONS
-                    ? "bg-blue-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-blue-500/20 border-blue-500/50 text-blue-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-blue-300 hover:border-slate-700"
                 }`}
+                title="Transações Financeiras"
               >
-                <Receipt className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
-                <span>Transações</span>
+                <Receipt className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
+                  Transações
+                </span>
               </button>
 
+              {/* 2. Assinaturas */}
               <button
                 onClick={() => handleNavClick(View.SUBSCRIPTIONS)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.SUBSCRIPTIONS
-                    ? "bg-blue-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-purple-300 hover:border-slate-700"
                 }`}
+                title="Assinaturas Recorrentes"
               >
-                <Repeat className="w-3.5 h-3.5 shrink-0 text-purple-400" />
-                <span>Assinaturas</span>
+                <Repeat className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
+                  Assinaturas
+                </span>
               </button>
 
+              {/* 3. Dívidas */}
               <button
                 onClick={() => handleNavClick(View.DEBTS)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.DEBTS
-                    ? "bg-blue-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-rose-500/20 border-rose-500/50 text-rose-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-rose-300 hover:border-slate-700"
                 }`}
+                title="Controle de Dívidas"
               >
-                <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-rose-400" />
-                <span>Dívidas</span>
+                <ShieldAlert className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
+                  Dívidas
+                </span>
               </button>
 
+              {/* 4. Orçamentos */}
               <button
                 onClick={() => handleNavClick(View.BUDGETS)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.BUDGETS
-                    ? "bg-blue-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-sky-500/20 border-sky-500/50 text-sky-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-sky-300 hover:border-slate-700"
                 }`}
+                title="Limites e Orçamentos"
               >
-                <Target className="w-3.5 h-3.5 shrink-0 text-sky-400" />
-                <span>Orçamentos</span>
-              </button>
-
-              <button
-                onClick={() => handleNavClick(View.PIX_KEYS)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                  currentView === View.PIX_KEYS
-                    ? "bg-blue-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`}
-              >
-                <Key className="w-3.5 h-3.5 shrink-0 text-teal-400" />
-                <span>Pix</span>
+                <Target className="w-4 h-4 text-sky-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
+                  Orçamentos
+                </span>
               </button>
             </div>
           )}
@@ -390,7 +382,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Investimentos */}
         <div className="space-y-1">
           <button
-            onClick={() => toggleMenu("investimentos", View.INVESTMENTS_DASHBOARD)}
+            onClick={() => toggleMenu("investimentos", View.INVESTMENTS)}
             className={`flex w-full items-center justify-between px-3 py-2.5 rounded-xl transition-all text-xs font-bold ${
               isInvestimentosActive
                 ? "bg-teal-600/20 text-teal-300 border border-teal-500/40 shadow-sm"
@@ -411,77 +403,85 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
 
           {(openMenus.investimentos ?? isInvestimentosActive) && (
-            <div className="pl-4 space-y-1 py-1 border-l-2 border-teal-500/30 ml-4">
+            <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950/40 rounded-xl border border-slate-800/60 my-1 animate-fade-in">
+              {/* 1. Meus Investimentos */}
               <button
                 onClick={() => handleNavClick(View.INVESTMENTS)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.INVESTMENTS
-                    ? "bg-teal-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-teal-500/20 border-teal-500/50 text-teal-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-teal-300 hover:border-slate-700"
                 }`}
+                title="Meus Investimentos"
               >
-                <TrendingUp className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                <span>Meus Investimentos</span>
+                <TrendingUp className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
+                  Investimentos
+                </span>
               </button>
 
+              {/* 2. Motor de Crescimento */}
               <button
                 onClick={() => handleNavClick(View.STOCKS_GROWTH)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.STOCKS_GROWTH
-                    ? "bg-teal-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-indigo-300 hover:border-slate-700"
                 }`}
+                title="Motor de Crescimento (Ações B3)"
               >
-                <Rocket className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
-                <span>Motor de Crescimento</span>
+                <Rocket className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
+                  Crescimento
+                </span>
               </button>
 
+              {/* 3. Bola de Neve */}
               <button
                 onClick={() => handleNavClick(View.SNOWBALL)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.SNOWBALL
-                    ? "bg-teal-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-cyan-300 hover:border-slate-700"
                 }`}
+                title="Efeito Bola de Neve"
               >
-                <Snowflake className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
-                <span>Bola de Neve</span>
+                <Snowflake className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
+                  Bola de Neve
+                </span>
               </button>
 
+              {/* 4. Desafios Financeiros */}
               <button
                 onClick={() => handleNavClick(View.FINANCIAL_CHALLENGES)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.FINANCIAL_CHALLENGES
-                    ? "bg-teal-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-amber-300 hover:border-slate-700"
                 }`}
+                title="Desafios Financeiros"
               >
-                <Coins className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                <span>Desafios Financeiros</span>
+                <Coins className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
+                  Desafios
+                </span>
               </button>
 
+              {/* 5. Aposentadoria */}
               <button
                 onClick={() => handleNavClick(View.WEALTH_PLANNER)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`col-span-2 flex items-center justify-center gap-2 py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.WEALTH_PLANNER
-                    ? "bg-teal-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-purple-300 hover:border-slate-700"
                 }`}
+                title="Planejador de Aposentadoria & Liberdade Financeira"
               >
-                <Landmark className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
-                <span>Aposentadoria</span>
-              </button>
-
-              <button
-                onClick={() => handleNavClick(View.MERCADO_ESPORTIVO)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                  currentView === View.MERCADO_ESPORTIVO
-                    ? "bg-teal-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`}
-              >
-                <Trophy className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                <span>Mercado Esportivo</span>
+                <Landmark className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform shrink-0" />
+                <span className="text-[10px] tracking-tight font-medium truncate">
+                  Aposentadoria
+                </span>
               </button>
             </div>
           )}
@@ -511,41 +511,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
 
           {(openMenus.compras ?? isComprasActive) && (
-            <div className="pl-4 space-y-1 py-1 border-l-2 border-amber-500/30 ml-4">
+            <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950/40 rounded-xl border border-slate-800/60 my-1 animate-fade-in">
+              {/* 1. Lista de Compras */}
               <button
                 onClick={() => handleNavClick(View.SHOPPING_LIST)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.SHOPPING_LIST
-                    ? "bg-amber-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-amber-300 hover:border-slate-700"
                 }`}
+                title="Lista de Compras do Mês"
               >
-                <ShoppingCart className="w-3.5 h-3.5 shrink-0 text-rose-400" />
-                <span>Lista de Compras</span>
+                <ShoppingCart className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
+                  Compras
+                </span>
               </button>
 
+              {/* 2. Estoque */}
               <button
                 onClick={() => handleNavClick(View.INVENTORY)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.INVENTORY
-                    ? "bg-amber-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-indigo-300 hover:border-slate-700"
                 }`}
+                title="Despensa & Estoque Doméstico"
               >
-                <Package className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
-                <span>Estoque</span>
+                <Package className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
+                  Estoque
+                </span>
               </button>
 
+              {/* 3. Sonhos de Consumo */}
               <button
                 onClick={() => handleNavClick(View.KANBAN)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`col-span-2 flex items-center justify-center gap-2 py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.KANBAN
-                    ? "bg-amber-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-purple-300 hover:border-slate-700"
                 }`}
+                title="Sonhos de Consumo & Prioridades"
               >
-                <Sparkles className="w-3.5 h-3.5 shrink-0 text-purple-400" />
-                <span className="leading-tight text-left">Sonhos de Consumo</span>
+                <Sparkles className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform shrink-0" />
+                <span className="text-[10px] tracking-tight font-medium truncate">
+                  Sonhos de Consumo
+                </span>
               </button>
             </div>
           )}
@@ -575,53 +587,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
 
           {(openMenus.planejamento ?? isProductivityActive) && (
-            <div className="pl-4 space-y-1 py-1 border-l-2 border-emerald-500/30 ml-4">
+            <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950/40 rounded-xl border border-slate-800/60 my-1 animate-fade-in">
+              {/* 1. Hábitos */}
               <button
                 onClick={() => handleNavClick(View.PRODUCTIVITY)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.PRODUCTIVITY
-                    ? "bg-emerald-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-emerald-300 hover:border-slate-700"
                 }`}
+                title="Controle de Hábitos Diários"
               >
-                <Target className="w-3.5 h-3.5 shrink-0 text-rose-400" />
-                <span>Hábitos</span>
+                <Target className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
+                  Hábitos
+                </span>
               </button>
 
-              <button
-                onClick={() => handleNavClick(View.NOTES)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                  currentView === View.NOTES
-                    ? "bg-emerald-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`}
-              >
-                <StickyNote className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                <span>NEXO Notes</span>
-              </button>
-
+              {/* 2. Metas de Trabalho */}
               <button
                 onClick={() => handleNavClick(View.WORK_GOALS)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.WORK_GOALS
-                    ? "bg-emerald-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-teal-500/20 border-teal-500/50 text-teal-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-teal-300 hover:border-slate-700"
                 }`}
+                title="Metas de Trabalho & Projetos"
               >
-                <LineChart className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                <span>Metas de Trabalho</span>
-              </button>
-
-              <button
-                onClick={() => handleNavClick(View.PASSWORDS)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                  currentView === View.PASSWORDS
-                    ? "bg-emerald-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`}
-              >
-                <Key className="w-3.5 h-3.5 shrink-0 text-sky-400" />
-                <span>Cofre de Senhas</span>
+                <LineChart className="w-4 h-4 text-teal-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
+                  Metas
+                </span>
               </button>
             </div>
           )}
@@ -651,123 +647,147 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
 
           {(openMenus.saude ?? isSaudeActive) && (
-            <div className="pl-4 space-y-1 py-1 border-l-2 border-rose-500/30 ml-4">
+            <div className="grid grid-cols-1 gap-1.5 p-1.5 bg-slate-950/40 rounded-xl border border-slate-800/60 my-1 animate-fade-in">
               <button
                 onClick={() => handleNavClick(View.TREINO)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex items-center justify-center gap-2 py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.TREINO
-                    ? "bg-rose-600 text-white font-bold shadow-sm"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-rose-500/20 border-rose-500/50 text-rose-300 shadow-sm"
+                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-rose-300 hover:border-slate-700"
                 }`}
+                title="Treinos, Fichas & Saúde"
               >
-                <Activity className="w-3.5 h-3.5 shrink-0 text-orange-400" />
-                <span>Treinos & Saúde</span>
+                <Activity className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform shrink-0" />
+                <span className="text-[10px] tracking-tight font-medium truncate">
+                  Treinos & Saúde
+                </span>
               </button>
             </div>
           )}
         </div>
-        
-        {/* Focus Mode */}
-        <div className="mt-6 pt-4 border-t border-slate-800">
+      </div>
+
+      {/* Barra Fixa de Atalhos Rápidos (Foco, Notas, Senhas, Pix) */}
+      <div className="px-3 py-2 border-t border-slate-800 bg-slate-900/95 shrink-0">
+        <div className="grid grid-cols-4 gap-1.5">
+          {/* 1. Modo Foco (Relógio) */}
           <button
             onClick={openModal}
-            className={`w-full relative group overflow-hidden rounded-xl p-[1px] transition-all duration-300 ${
+            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all border group relative ${
               isActive
-                ? "bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/20"
-                : "bg-slate-700/50 hover:bg-slate-700"
+                ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-400 shadow-sm shadow-emerald-950/40"
+                : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-emerald-400 hover:border-slate-700"
             }`}
+            title={
+              isActive
+                ? `Modo Foco Ativo (${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, "0")})`
+                : "Modo Foco"
+            }
           >
-            <div
-              className={`relative flex flex-col items-center justify-center gap-1 px-4 py-3 rounded-[11px] bg-slate-900 transition-colors h-full`}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`p-1.5 rounded-lg ${isActive ? "bg-emerald-500/20" : "bg-slate-800 group-hover:bg-slate-700"}`}
-                >
-                  <BrainCircuit
-                    className={`w-4 h-4 ${isActive ? "text-emerald-400 animate-pulse" : "text-slate-400 group-hover:text-white"}`}
-                  />
-                </div>
-                <div className="text-left">
-                  <p
-                    className={`text-sm font-bold ${isActive ? "text-white" : "text-slate-300 group-hover:text-white"}`}
-                  >
-                    Modo Foco
-                  </p>
-                  <p
-                    className={`text-xs ${isActive ? "text-emerald-400 font-mono" : "text-slate-500 group-hover:text-slate-400"}`}
-                  >
-                    {isActive
-                      ? `${Math.floor(timeLeft / 60)
-                          .toString()
-                          .padStart(
-                            2,
-                            "0",
-                          )}:${(timeLeft % 60).toString().padStart(2, "0")}`
-                      : "Temporizador de estudo"}
-                  </p>
-                  {isActive && focusReason && (
-                    <p
-                      className="text-[10px] text-emerald-300 truncate w-full mt-0.5"
-                      title={focusReason}
-                    >
-                      {focusReason}
-                    </p>
-                  )}
-                </div>
-              </div>
+            <div className="relative">
+              <Clock className={`w-3.5 h-3.5 ${isActive ? "text-emerald-400 animate-pulse" : "group-hover:scale-105 transition-transform"}`} />
+              {isActive && (
+                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+              )}
             </div>
+            <span className={`text-[9px] mt-0.5 tracking-tight font-medium truncate max-w-full ${isActive ? "text-emerald-300 font-bold font-mono" : ""}`}>
+              {isActive
+                ? `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, "0")}`
+                : "Foco"}
+            </span>
+          </button>
+
+          {/* 2. Anotações (NEXO Notes) */}
+          <button
+            onClick={() => handleNavClick(View.NOTES)}
+            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all border group ${
+              currentView === View.NOTES
+                ? "bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-sm"
+                : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-amber-300 hover:border-slate-700"
+            }`}
+            title="Anotações Rápidas (NEXO Notes)"
+          >
+            <StickyNote className="w-3.5 h-3.5 group-hover:scale-105 transition-transform" />
+            <span className="text-[9px] mt-0.5 tracking-tight font-medium truncate">Notas</span>
+          </button>
+
+          {/* 3. Cofre de Senhas */}
+          <button
+            onClick={() => handleNavClick(View.PASSWORDS)}
+            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all border group ${
+              currentView === View.PASSWORDS
+                ? "bg-sky-500/20 border-sky-500/50 text-sky-300 shadow-sm"
+                : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-sky-300 hover:border-slate-700"
+            }`}
+            title="Cofre de Senhas"
+          >
+            <Lock className="w-3.5 h-3.5 group-hover:scale-105 transition-transform" />
+            <span className="text-[9px] mt-0.5 tracking-tight font-medium truncate">Senhas</span>
+          </button>
+
+          {/* 4. Chaves Pix */}
+          <button
+            onClick={() => handleNavClick(View.PIX_KEYS)}
+            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all border group ${
+              currentView === View.PIX_KEYS
+                ? "bg-teal-500/20 border-teal-500/50 text-teal-300 shadow-sm"
+                : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-teal-300 hover:border-slate-700"
+            }`}
+            title="Chaves Pix"
+          >
+            <QrCode className="w-3.5 h-3.5 group-hover:scale-105 transition-transform" />
+            <span className="text-[9px] mt-0.5 tracking-tight font-medium truncate">Pix</span>
           </button>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="mt-auto p-4 border-t border-slate-800 bg-slate-900 shrink-0">
+      <div className="mt-auto px-3 py-2.5 border-t border-slate-800 bg-slate-900 shrink-0">
         {canInstall && (
           <button
             onClick={onInstall}
-            className="w-full mb-4 flex items-center justify-center gap-2 p-2 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20"
+            className="w-full mb-3 flex items-center justify-center gap-2 p-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 transition-all shadow-md shadow-emerald-500/20"
           >
-            <AppWindow className="w-3 h-3" /> Instalar App (PWA)
+            <AppWindow className="w-3.5 h-3.5" /> Instalar App (PWA)
           </button>
         )}
 
         {/* Simplified Footer Grid */}
-        <div className="flex justify-between items-center gap-2 flex-wrap">
+        <div className="flex justify-between items-center gap-1.5 flex-wrap">
           <button
             onClick={onOpenShortcutsModal}
-            className="flex-1 min-w-[40px] flex items-center justify-center p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all border border-slate-800 hover:border-slate-700"
+            className="flex-1 min-w-[32px] flex items-center justify-center p-1.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all border border-slate-800 hover:border-slate-700"
             title="Atalhos Rápidos"
           >
-            <Link className="w-5 h-5" />
+            <Link className="w-3.5 h-3.5" />
           </button>
 
           <button
             onClick={() => handleNavClick(View.SETTINGS)}
-            className={`flex-1 min-w-[40px] flex items-center justify-center p-2 rounded-lg transition-all border border-slate-800 hover:border-slate-700 ${currentView === View.SETTINGS ? "bg-indigo-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}
+            className={`flex-1 min-w-[32px] flex items-center justify-center p-1.5 rounded-lg transition-all border border-slate-800 hover:border-slate-700 ${currentView === View.SETTINGS ? "bg-indigo-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}
             title="Configurações e Dados"
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-3.5 h-3.5" />
           </button>
 
           <button
             onClick={toggleFullscreen}
-            className="flex-1 min-w-[40px] flex items-center justify-center p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all border border-slate-800 hover:border-slate-700"
+            className="flex-1 min-w-[32px] flex items-center justify-center p-1.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all border border-slate-800 hover:border-slate-700"
             title={isFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}
           >
             {isFullscreen ? (
-              <Minimize className="w-5 h-5" />
+              <Minimize className="w-3.5 h-3.5" />
             ) : (
-              <Maximize className="w-5 h-5" />
+              <Maximize className="w-3.5 h-3.5" />
             )}
           </button>
 
           <button
             onClick={onOpenDonateModal}
-            className="flex-1 min-w-[40px] flex items-center justify-center p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-pink-500 transition-all border border-slate-800 hover:border-slate-700"
+            className="flex-1 min-w-[32px] flex items-center justify-center p-1.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-pink-500 transition-all border border-slate-800 hover:border-slate-700"
             title="Apoiar Projeto"
           >
-            <Heart className="w-5 h-5" />
+            <Heart className="w-3.5 h-3.5" />
           </button>
 
           <button
@@ -794,25 +814,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onSetDriveLink(link);
               }
             }}
-            className="flex-1 min-w-[40px] flex items-center justify-center p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-blue-400 transition-all border border-slate-800 hover:border-slate-700"
+            className="flex-1 min-w-[32px] flex items-center justify-center p-1.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-blue-400 transition-all border border-slate-800 hover:border-slate-700"
             title={
               driveLink
                 ? "Abrir Pasta de Comprovantes (Botão direito para editar)"
                 : "Configurar Pasta de Comprovantes"
             }
           >
-            <Cloud className="w-5 h-5" />
+            <Cloud className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* Credits & Version */}
-        <div className="pt-4 mt-3 border-t border-slate-800 text-center">
+        <div className="pt-2 mt-1.5 border-t border-slate-800 text-center">
           <p className="text-[10px] text-slate-500 font-mono">v2.6.0 Config</p>
           <a
             href="https://www.linkedin.com/in/alemagnobr/"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[10px] text-slate-400 hover:text-indigo-400 transition-colors flex items-center justify-center gap-1.5 mt-1"
+            className="text-[10px] text-slate-400 hover:text-indigo-400 transition-colors flex items-center justify-center gap-1.5 mt-0.5"
           >
             <Linkedin className="w-3 h-3" /> Alexandre Magno S. Linhares
           </a>

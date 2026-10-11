@@ -5,9 +5,7 @@ import { SnowballView } from './SnowballView';
 import { FinancialChallengeView } from './FinancialChallengeView';
 import { RetirementMachine } from './RetirementMachine';
 import { StocksGrowthView } from './StocksGrowthView';
-import { MercadoEsportivoView } from './MercadoEsportivoView';
-import { getSportsProjectsData, getGlobalSportsStats } from '../services/sportsBettingService';
-import { LineChart, Coins, Landmark, TrendingUp, Trophy, ArrowRight, DollarSign, Target, Snowflake, Zap, Rocket, ShieldCheck } from 'lucide-react';
+import { LineChart, Coins, Landmark, TrendingUp, ArrowRight, DollarSign, Target, Snowflake, Zap, Rocket } from 'lucide-react';
 
 interface InvestimentosViewProps {
   currentView: View;
@@ -28,57 +26,6 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
   hasApiKey,
   quickActionSignal,
 }) => {
-  const tabs = [
-    {
-      id: View.INVESTMENTS,
-      label: 'Meus Investimentos',
-      icon: LineChart,
-      iconColor: 'text-emerald-600 dark:text-emerald-400',
-      iconBg: 'bg-emerald-100/90 dark:bg-emerald-950/80',
-      activeBorder: 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300',
-    },
-    {
-      id: View.STOCKS_GROWTH,
-      label: 'Motor de Crescimento (Ações)',
-      icon: Rocket,
-      iconColor: 'text-indigo-600 dark:text-indigo-400',
-      iconBg: 'bg-indigo-100/90 dark:bg-indigo-950/80',
-      activeBorder: 'border-indigo-500/30 text-indigo-700 dark:text-indigo-300',
-    },
-    {
-      id: View.SNOWBALL,
-      label: 'Bola de Neve',
-      icon: Snowflake,
-      iconColor: 'text-cyan-600 dark:text-cyan-400',
-      iconBg: 'bg-cyan-100/90 dark:bg-cyan-950/80',
-      activeBorder: 'border-cyan-500/30 text-cyan-700 dark:text-cyan-300',
-    },
-    {
-      id: View.FINANCIAL_CHALLENGES,
-      label: 'Desafio Financeiro',
-      icon: Coins,
-      iconColor: 'text-amber-600 dark:text-amber-400',
-      iconBg: 'bg-amber-100/90 dark:bg-amber-950/80',
-      activeBorder: 'border-amber-500/30 text-amber-700 dark:text-amber-300',
-    },
-    {
-      id: View.WEALTH_PLANNER,
-      label: 'Aposentadoria',
-      icon: Landmark,
-      iconColor: 'text-purple-600 dark:text-purple-400',
-      iconBg: 'bg-purple-100/90 dark:bg-purple-950/80',
-      activeBorder: 'border-purple-500/30 text-purple-700 dark:text-purple-300',
-    },
-    {
-      id: View.MERCADO_ESPORTIVO,
-      label: 'Mercado Esportivo',
-      icon: Trophy,
-      iconColor: 'text-emerald-500 dark:text-emerald-400',
-      iconBg: 'bg-emerald-100/90 dark:bg-emerald-950/80',
-      activeBorder: 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300',
-    },
-  ];
-
   // Calculate summary metrics for overview
   const totalInvested = (data.investments || []).reduce((acc: number, item: any) => acc + (item.amount || 0), 0);
   const activeChallengesCount = (data.financialChallenges || []).length;
@@ -96,53 +43,8 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
     inv.sharesCount !== undefined
   ).length;
 
-  // Sports betting quick state
-  const sportsProjectsData = React.useMemo(() => {
-    try {
-      return getSportsProjectsData();
-    } catch {
-      return null;
-    }
-  }, [currentView]);
-
-  const sportsGlobalStats = React.useMemo(() => {
-    if (!sportsProjectsData?.projects) return null;
-    return getGlobalSportsStats(sportsProjectsData.projects);
-  }, [sportsProjectsData]);
-
-  const sportsBankroll = sportsGlobalStats?.totalBankrolls ?? 1000;
-  const sportsTotalEquity = sportsGlobalStats?.totalEquity ?? 1000;
-  const sportsProjectsCount = sportsGlobalStats?.activeProjectsCount ?? 1;
-  const sportsOpsCount = sportsGlobalStats?.totalOperations ?? 0;
-
   return (
     <div className="space-y-6">
-      {/* Internal Tabs Navigation - Sleek Compact Pill Control */}
-      <div className="w-full overflow-x-auto scrollbar-hide pb-1">
-        <div className="flex items-center gap-1 w-max min-w-full md:w-auto p-1 bg-slate-200/60 dark:bg-slate-800/50 backdrop-blur-md rounded-full mx-auto border border-slate-300/60 dark:border-slate-700/60 shadow-sm">
-          {tabs.map((tab) => {
-            const isActive = currentView === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => onNavigate(tab.id)}
-                className={`
-                  flex-1 shrink-0 relative flex flex-row items-center justify-center gap-2 py-1.5 px-3.5 md:px-5 rounded-full font-medium transition-all duration-200 cursor-pointer text-xs
-                  ${
-                    isActive
-                      ? `bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-300/60 dark:ring-slate-600 font-bold`
-                      : `text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300/40 dark:hover:bg-slate-700/40`
-                  }
-                `}
-              >
-                <tab.icon className={`w-3.5 h-3.5 shrink-0 ${tab.iconColor}`} />
-                <span className="whitespace-nowrap truncate">{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Content Area */}
       <div className="animate-fade-in bg-slate-50/50 dark:bg-slate-900/50 rounded-2xl">
         {currentView === View.INVESTMENTS_DASHBOARD && (
@@ -154,7 +56,7 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
                   Hub de Investimentos & Futuro
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Gerencie sua carteira, ações de crescimento, estratégia Bola de Neve (FIIs), desafios de economia, mercado esportivo com blindagem e planeje sua aposentadoria.
+                  Gerencie sua carteira, ações de crescimento, estratégia Bola de Neve (FIIs), desafios de economia e planeje sua aposentadoria.
                 </p>
               </div>
             </div>
@@ -334,42 +236,6 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
                   </div>
                 </div>
               </div>
-
-              {/* Card 6: Mercado Esportivo */}
-              <div
-                className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-emerald-200 dark:border-emerald-800/80 shadow-sm flex flex-col justify-between gap-4 cursor-pointer hover:border-emerald-400 hover:shadow-md transition-all group relative overflow-hidden"
-                onClick={() => onNavigate(View.MERCADO_ESPORTIVO)}
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-xl">
-                      <Trophy className="w-6 h-6" />
-                    </div>
-                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-200/60 dark:border-emerald-800/60 flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3" />
-                      {sportsProjectsCount} {sportsProjectsCount === 1 ? 'projeto' : 'projetos'} • {sportsOpsCount} ops
-                    </span>
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-800 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                    Mercado Esportivo & Projetos
-                  </h3>
-                  <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
-                    Crie múltiplos projetos simultâneos com gestão de risco, juros compostos calculados e cofre de proteção blindado.
-                  </p>
-                </div>
-
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Total em Bancas</span>
-                    <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                      {privacyMode ? '••••••' : `R$ ${sportsBankroll.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                    </span>
-                  </div>
-                  <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-300 group-hover:bg-emerald-600 group-hover:text-white transition-all">
-                    <ArrowRight className="w-4 h-4" />
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         )}
@@ -432,16 +298,6 @@ export const InvestimentosView: React.FC<InvestimentosViewProps> = ({
             onNavigateToInvestments={() => onNavigate(View.INVESTMENTS)}
             privacyMode={privacyMode}
             hasApiKey={hasApiKey}
-          />
-        )}
-
-        {currentView === View.MERCADO_ESPORTIVO && (
-          <MercadoEsportivoView
-            privacyMode={privacyMode}
-            onNavigate={onNavigate}
-            investments={data.investments || []}
-            onAddTransaction={actions.addTransaction}
-            onUpdateInvestment={actions.updateInvestment}
           />
         )}
       </div>

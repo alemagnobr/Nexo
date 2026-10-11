@@ -13,7 +13,6 @@ import {
   Landmark,
   CheckSquare,
   Activity,
-  LayoutDashboard,
   LineChart,
   ArrowUp
 } from "lucide-react";
@@ -40,7 +39,6 @@ import { auth } from "./services/firebase";
 import { onAuthStateChanged, User, signOut } from "firebase/auth";
 
 import { Login } from "./components/Login";
-import { Dashboard } from "./components/Dashboard";
 import { AiAssistant } from "./components/AiAssistant";
 import { Sidebar } from "./components/Sidebar";
 import { FocusTimerModal } from "./components/FocusTimerModal";
@@ -71,21 +69,25 @@ const getInitialView = (): View => {
       const match = Object.values(View).find(
         (v) => v.toUpperCase() === upperHash
       );
-      if (match) {
+      if (match && match !== View.DASHBOARD) {
         return match;
       }
     }
     // 2. Check localStorage
     if (typeof localStorage !== "undefined") {
       const savedView = localStorage.getItem("nexo_current_view");
-      if (savedView && Object.values(View).includes(savedView as View)) {
+      if (
+        savedView &&
+        Object.values(View).includes(savedView as View) &&
+        (savedView as View) !== View.DASHBOARD
+      ) {
         return savedView as View;
       }
     }
   } catch (e) {
     console.error("Error reading initial view:", e);
   }
-  return View.DASHBOARD;
+  return View.TRANSACTIONS;
 };
 
 const App: React.FC = () => {
@@ -136,6 +138,13 @@ const App: React.FC = () => {
     }
   }, [currentView]);
 
+  // Ensure any legacy dashboard route redirects cleanly to transactions
+  useEffect(() => {
+    if (currentView === View.DASHBOARD) {
+      setCurrentView(View.TRANSACTIONS);
+    }
+  }, [currentView]);
+
   const handleMainScroll = () => {
     if (mainRef.current) {
       setShowScrollTop(mainRef.current.scrollTop > 280);
@@ -158,7 +167,11 @@ const App: React.FC = () => {
           (v) => v.toUpperCase() === upperHash
         );
         if (match && match !== currentView) {
-          setCurrentView(match);
+          if (match === View.DASHBOARD) {
+            setCurrentView(View.TRANSACTIONS);
+          } else {
+            setCurrentView(match);
+          }
         }
       } catch (e) {
         console.error("Error handling hash change:", e);
@@ -264,9 +277,9 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     try {
       localStorage.removeItem("nexo_current_view");
-      window.history.replaceState(null, "", "#dashboard");
+      window.history.replaceState(null, "", "#transactions");
     } catch (e) {}
-    setCurrentView(View.DASHBOARD);
+    setCurrentView(View.TRANSACTIONS);
     if (isGuest) {
       setIsGuest(false);
       setData({
@@ -406,20 +419,6 @@ const App: React.FC = () => {
 
   // View Renderer - Logic Updated for Grouped Views
   const renderContent = () => {
-    // 1. Dashboard & AI are Top Level
-    if (currentView === View.DASHBOARD) {
-      return (
-        <Dashboard
-          data={data}
-          privacyMode={privacyMode}
-          onUnlockBadge={actions.unlockBadge}
-          onNavigate={(view) => setCurrentView(view)}
-          onToggleHabitEntry={actions.toggleHabitEntry}
-          onSync={actions.syncDashboardData}
-        />
-      );
-    }
-
     if (currentView === View.AI_ASSISTANT) {
       return <AiAssistant data={data} privacyMode={privacyMode} />;
     }
@@ -475,7 +474,6 @@ const App: React.FC = () => {
         View.SNOWBALL,
         View.FINANCIAL_CHALLENGES,
         View.WEALTH_PLANNER,
-        View.MERCADO_ESPORTIVO,
       ].includes(currentView)
     ) {
       return (
@@ -568,19 +566,16 @@ const App: React.FC = () => {
       );
     }
 
-    // Fallback
+    // Fallback: Default to Transações
     return (
-      <Dashboard
+      <FinanceiroView
+        currentView={View.TRANSACTIONS}
+        onNavigate={setCurrentView}
         data={data}
+        actions={actions}
         privacyMode={privacyMode}
-        onUnlockBadge={actions.unlockBadge}
-        onNavigate={(view) => setCurrentView(view)}
-        onToggleHabitEntry={actions.toggleHabitEntry}
-        
-        
-        
-        
-        
+        hasApiKey={hasKey}
+        quickActionSignal={quickActionSignal}
       />
     );
   };
@@ -682,76 +677,6 @@ const App: React.FC = () => {
         </div>
 
         <div className="max-w-7xl mx-auto animate-fade-in">
-          {/* Quick Actions Bar - Replacing with Segmented Control for Main Navigation */}
-          {[
-            View.DASHBOARD,
-            View.CALENDAR,
-            View.FINANCEIRO_DASHBOARD, View.TRANSACTIONS, View.SUBSCRIPTIONS, View.DEBTS, View.INVESTMENTS, View.INVESTMENTS_DASHBOARD, View.FINANCIAL_CHALLENGES, View.BUDGETS, View.WEALTH_PLANNER, View.PIX_KEYS,
-            View.PLANEJAMENTO_DASHBOARD, View.KANBAN, View.NOTES, View.PRODUCTIVITY, View.WORK_GOALS, View.SHOPPING_LIST, View.PASSWORDS, View.INVENTORY,
-            View.SAUDE_DASHBOARD, View.TREINO
-          ].includes(currentView) && (
-            <div className="w-full overflow-x-auto scrollbar-hide pb-2 mb-4 px-1 -mx-1">
-              <div className="flex items-center justify-start md:justify-center gap-1.5 w-max min-w-full p-1.5 bg-slate-900/90 dark:bg-slate-950/90 backdrop-blur-xl rounded-full border border-slate-800/80 shadow-xl shadow-slate-950/30">
-                {[
-                  { id: View.DASHBOARD, label: 'Visão Geral', icon: LayoutDashboard, 
-                    activeBg: 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/30',
-                    activeIcon: 'text-white',
-                    inactiveIcon: 'text-indigo-400',
-                    isActive: currentView === View.DASHBOARD },
-                  { id: View.CALENDAR, label: 'Agenda', icon: Calendar, 
-                    activeBg: 'bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-1 ring-purple-400/30',
-                    activeIcon: 'text-white',
-                    inactiveIcon: 'text-purple-400',
-                    isActive: currentView === View.CALENDAR },
-                  { id: View.TRANSACTIONS, label: 'Financeiro', icon: Landmark, 
-                    activeBg: 'bg-blue-600 text-white shadow-md shadow-blue-600/30 ring-1 ring-blue-400/30',
-                    activeIcon: 'text-white',
-                    inactiveIcon: 'text-blue-400',
-                    isActive: [View.FINANCEIRO_DASHBOARD, View.TRANSACTIONS, View.SUBSCRIPTIONS, View.DEBTS, View.BUDGETS, View.PIX_KEYS].includes(currentView) },
-                  { id: View.INVESTMENTS_DASHBOARD, label: 'Investimentos', icon: LineChart, 
-                    activeBg: 'bg-teal-600 text-white shadow-md shadow-teal-600/30 ring-1 ring-teal-400/30',
-                    activeIcon: 'text-white',
-                    inactiveIcon: 'text-teal-400',
-                    isActive: [View.INVESTMENTS_DASHBOARD, View.INVESTMENTS, View.FINANCIAL_CHALLENGES, View.WEALTH_PLANNER].includes(currentView) },
-                  { id: View.SHOPPING_LIST, label: 'Compras', icon: ShoppingCart, 
-                    activeBg: 'bg-amber-600 text-white shadow-md shadow-amber-600/30 ring-1 ring-amber-400/30',
-                    activeIcon: 'text-white',
-                    inactiveIcon: 'text-amber-400',
-                    isActive: [View.SHOPPING_LIST, View.INVENTORY, View.KANBAN].includes(currentView) },
-                  { id: View.PRODUCTIVITY, label: 'Planejamento', icon: Target, 
-                    activeBg: 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400/30',
-                    activeIcon: 'text-white',
-                    inactiveIcon: 'text-emerald-400',
-                    isActive: [View.PLANEJAMENTO_DASHBOARD, View.NOTES, View.PRODUCTIVITY, View.WORK_GOALS, View.PASSWORDS].includes(currentView) },
-                  { id: View.TREINO, label: 'Saúde', icon: Activity, 
-                    activeBg: 'bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-1 ring-rose-400/30',
-                    activeIcon: 'text-white',
-                    inactiveIcon: 'text-rose-400',
-                    isActive: [View.SAUDE_DASHBOARD, View.TREINO].includes(currentView) }
-                ].map(tab => {
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => {
-                        setCurrentView(tab.id);
-                        setMobileMenuOpen(false);
-                      }}
-                      className={`
-                        group flex-1 shrink-0 relative flex flex-row items-center justify-center gap-1.5 md:gap-2 py-1.5 md:py-2 px-3 md:px-4 rounded-full font-semibold transition-all duration-200 cursor-pointer text-xs md:text-xs
-                        ${tab.isActive 
-                          ? `${tab.activeBg}` 
-                          : `text-slate-400 hover:text-slate-100 hover:bg-slate-800/60`}
-                      `}
-                    >
-                      <tab.icon className={`w-3.5 h-3.5 md:w-4 md:h-4 shrink-0 transition-transform group-hover:scale-105 ${tab.isActive ? tab.activeIcon : tab.inactiveIcon}`} />
-                      <span className="whitespace-nowrap tracking-tight">{tab.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {renderContent()}
         </div>
 

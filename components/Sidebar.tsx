@@ -48,7 +48,6 @@ import {
   Coins,
   TrendingUp,
   Snowflake,
-  Rocket,
   Trophy,
   Lock,
   QrCode,
@@ -132,7 +131,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isInvestimentosActive = [
     View.INVESTMENTS_DASHBOARD,
     View.INVESTMENTS,
-    View.STOCKS_GROWTH,
     View.SNOWBALL,
     View.FINANCIAL_CHALLENGES,
     View.WEALTH_PLANNER,
@@ -411,23 +409,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </span>
               </button>
 
-              {/* 2. Motor de Crescimento */}
-              <button
-                onClick={() => handleNavClick(View.STOCKS_GROWTH)}
-                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
-                  currentView === View.STOCKS_GROWTH
-                    ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-sm"
-                    : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-indigo-300 hover:border-slate-700"
-                }`}
-                title="Motor de Crescimento (Ações B3)"
-              >
-                <Rocket className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
-                  Crescimento
-                </span>
-              </button>
-
-              {/* 3. Bola de Neve */}
+              {/* 2. Bola de Neve */}
               <button
                 onClick={() => handleNavClick(View.SNOWBALL)}
                 className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
@@ -443,7 +425,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </span>
               </button>
 
-              {/* 4. Desafios Financeiros */}
+              {/* 3. Desafios Financeiros */}
               <button
                 onClick={() => handleNavClick(View.FINANCIAL_CHALLENGES)}
                 className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
@@ -459,18 +441,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </span>
               </button>
 
-              {/* 5. Aposentadoria */}
+              {/* 4. Aposentadoria */}
               <button
                 onClick={() => handleNavClick(View.WEALTH_PLANNER)}
-                className={`col-span-2 flex items-center justify-center gap-2 py-2 px-1 rounded-lg transition-all border group ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all border group ${
                   currentView === View.WEALTH_PLANNER
                     ? "bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-sm"
                     : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-purple-300 hover:border-slate-700"
                 }`}
                 title="Planejador de Aposentadoria & Liberdade Financeira"
               >
-                <Landmark className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform shrink-0" />
-                <span className="text-[10px] tracking-tight font-medium truncate">
+                <Landmark className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] mt-1 tracking-tight font-medium truncate max-w-full">
                   Aposentadoria
                 </span>
               </button>

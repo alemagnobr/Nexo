@@ -290,10 +290,12 @@ const App: React.FC = () => {
     }
   }, [currentView]);
 
-  // Ensure any legacy dashboard route redirects cleanly to transactions
+  // Ensure any legacy routes redirect cleanly
   useEffect(() => {
     if (currentView === View.DASHBOARD) {
       setCurrentView(View.TRANSACTIONS);
+    } else if (currentView === View.STOCKS_GROWTH) {
+      setCurrentView(View.INVESTMENTS);
     }
   }, [currentView]);
 
@@ -622,12 +624,11 @@ const App: React.FC = () => {
       );
     }
 
-    // 2.5. Group: Investimentos (Meus Investimentos, Motor de Crescimento, Bola de Neve, Desafios Financeiros, Aposentadoria)
+    // 2.5. Group: Investimentos (Meus Investimentos, Bola de Neve, Desafios Financeiros, Aposentadoria)
     if (
       [
         View.INVESTMENTS_DASHBOARD,
         View.INVESTMENTS,
-        View.STOCKS_GROWTH,
         View.SNOWBALL,
         View.FINANCIAL_CHALLENGES,
         View.WEALTH_PLANNER,

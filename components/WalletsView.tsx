@@ -13,6 +13,11 @@ interface WalletsViewProps {
   onTransfer?: (sourceWalletId: string, targetWalletId: string, amount: number, date: string, observation?: string) => void;
   onUpdateTransaction?: (id: string, updates: Partial<Transaction>) => void;
   onAddTransaction?: (t: Omit<Transaction, 'id'>) => void;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
+  budgetsHeader?: React.ReactNode;
+  budgetsContent?: React.ReactNode;
+  isBudgetsExpanded?: boolean;
 }
 
 export const getCreditCardMetrics = (wallet: Wallet, transactions: Transaction[] = []) => {
@@ -139,9 +144,32 @@ export const getCardGradient = (color: string = 'blue') => {
   }
 };
 
-export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions = [], categories = [], onAdd, onUpdate, onDelete, onTransfer, onUpdateTransaction, onAddTransaction }) => {
+export const WalletsView: React.FC<WalletsViewProps> = ({ 
+  wallets, 
+  transactions = [], 
+  categories = [], 
+  onAdd, 
+  onUpdate, 
+  onDelete, 
+  onTransfer, 
+  onUpdateTransaction, 
+  onAddTransaction,
+  isExpanded: controlledIsExpanded,
+  onToggleExpand,
+  budgetsHeader,
+  budgetsContent,
+  isBudgetsExpanded = false
+}) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [internalIsExpanded, setInternalIsExpanded] = useState(false);
+  const isExpanded = controlledIsExpanded !== undefined ? controlledIsExpanded : internalIsExpanded;
+  const handleToggleExpanded = () => {
+    if (controlledIsExpanded !== undefined && onToggleExpand) {
+      onToggleExpand();
+    } else {
+      setInternalIsExpanded(prev => !prev);
+    }
+  };
   const [editingId, setEditingId] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string>('');
   const [walletToDelete, setWalletToDelete] = useState<string | null>(null);
@@ -707,45 +735,60 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
 
   return (
     <>
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden animate-fade-in transition-all">
-        {/* Header Bar matching Metas & Orçamentos */}
-        <div className={`px-4 md:px-6 py-3.5 bg-slate-50/70 dark:bg-slate-900/40 ${isExpanded ? 'border-b border-slate-100 dark:border-slate-700/60' : ''} flex items-center justify-between`}>
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-              <Landmark className="w-4 h-4" />
+      {/* Top Header Bars Row: Minhas Contas e Metas lado a lado */}
+      <div className={`grid grid-cols-1 ${budgetsHeader ? 'md:grid-cols-2' : ''} gap-3 ${isExpanded || (isBudgetsExpanded && budgetsContent) ? 'mb-3' : 'mb-6'} items-start`}>
+        {/* Minhas Contas Header Card */}
+        <div className={`rounded-2xl border transition-all duration-200 overflow-hidden shadow-sm hover:shadow ${
+          isExpanded 
+            ? 'border-indigo-500 dark:border-indigo-400 ring-2 ring-indigo-500/20 shadow-md shadow-indigo-500/10 bg-white dark:bg-slate-800' 
+            : 'border-indigo-200/90 dark:border-indigo-900/60 hover:border-indigo-300 dark:hover:border-indigo-800 bg-gradient-to-r from-indigo-50/60 via-white to-white dark:from-indigo-950/30 dark:via-slate-800 dark:to-slate-800'
+        }`}>
+          <div 
+            onClick={handleToggleExpanded}
+            className="px-3.5 md:px-5 py-2.5 min-h-[48px] flex items-center justify-between cursor-pointer select-none group"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-indigo-500/15 dark:bg-indigo-500/25 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-500/20 group-hover:scale-105 transition-transform shadow-xs">
+                <Landmark className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-xs md:text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2 truncate">
+                  Minhas Contas
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100/90 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 shrink-0">
+                    {wallets.length} conta{wallets.length !== 1 ? 's' : ''}
+                  </span>
+                </h3>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                Minhas Contas
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                  {wallets.length} conta{wallets.length !== 1 ? 's' : ''}
-                </span>
-              </h3>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            {!isFormOpen && isExpanded && (
-              <button
-                onClick={() => setIsFormOpen(true)}
-                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded-lg text-xs font-bold transition-colors shadow-sm"
-                title="Cadastrar nova conta ou cartão"
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              {!isFormOpen && isExpanded && (
+                <button
+                  onClick={() => setIsFormOpen(true)}
+                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                  title="Cadastrar nova conta ou cartão"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Nova Conta
+                </button>
+              )}
+              <button 
+                onClick={handleToggleExpanded}
+                className="p-1 rounded-lg text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors"
+                title={isExpanded ? "Ocultar contas" : "Expandir contas"}
               >
-                <Plus className="w-3.5 h-3.5" /> Nova Conta
+                {isExpanded ? <ChevronUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" /> : <ChevronDown className="w-4 h-4" />}
               </button>
-            )}
-            <button 
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-              title={isExpanded ? "Ocultar contas" : "Expandir contas"}
-            >
-              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
+            </div>
           </div>
         </div>
 
-        {isExpanded && (
-          <div className="p-4 md:p-6 space-y-6">
+        {/* Metas & Orçamentos Header Card (lado a lado com Minhas Contas) */}
+        {budgetsHeader}
+      </div>
+
+      {/* Conteúdo Expandido de Minhas Contas (abaixo dos dois cabeçalhos, ocupando a largura total) */}
+      {isExpanded && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-indigo-200/80 dark:border-indigo-900/60 shadow-md shadow-indigo-500/5 overflow-hidden animate-fade-in transition-all p-4 md:p-6 space-y-6 mb-6">
           {isFormOpen && (
             <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/60 backdrop-blur-sm">
               <div className="flex min-h-full items-center justify-center p-4">
@@ -1123,7 +1166,13 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions 
       )}
           </div>
         )}
-      </div>
+
+      {/* Conteúdo Expandido de Metas & Orçamentos (abaixo dos dois cabeçalhos, ocupando a largura total) */}
+      {isBudgetsExpanded && budgetsContent && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-teal-200/80 dark:border-teal-900/60 shadow-md shadow-teal-500/5 overflow-hidden animate-fade-in transition-all p-3 md:p-4 mb-6">
+          {budgetsContent}
+        </div>
+      )}
 
       {/* Transfer Modal */}
       {isTransferModalOpen && (

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import {
   Receipt,
   LineChart,
@@ -155,22 +155,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
     View.TREINO
   ].includes(currentView);
 
-  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
+  // Active group detection
+  const activeGroup = useMemo(() => {
+    if (isFinanceiroActive) return "financeiro";
+    if (isInvestimentosActive) return "investimentos";
+    if (isComprasActive) return "compras";
+    if (isProductivityActive) return "planejamento";
+    if (isSaudeActive) return "saude";
+    return null;
+  }, [isFinanceiroActive, isInvestimentosActive, isComprasActive, isProductivityActive, isSaudeActive]);
+
+  // Keep single expanded menu state (accordion)
+  const [expandedMenu, setExpandedMenu] = useState<string | null>(activeGroup);
+
+  // Sync expanded menu when navigating across modules
+  useEffect(() => {
+    if (activeGroup) {
+      setExpandedMenu(activeGroup);
+    }
+  }, [activeGroup]);
 
   const toggleMenu = (menu: string, defaultView?: View) => {
-    setOpenMenus((prev) => {
-      const currentIsOpen = prev[menu] !== undefined 
-        ? prev[menu] 
-        : (menu === 'financeiro' ? isFinanceiroActive :
-           menu === 'investimentos' ? isInvestimentosActive :
-           menu === 'compras' ? isComprasActive :
-           menu === 'planejamento' ? isProductivityActive :
-           menu === 'saude' ? isSaudeActive : false);
-      return {
-        ...prev,
-        [menu]: !currentIsOpen,
-      };
-    });
+    setExpandedMenu((prev) => (prev === menu ? null : menu));
     if (defaultView && currentView !== defaultView) {
       handleNavClick(defaultView);
     }
@@ -219,74 +225,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
          ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
        `}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 md:p-4 border-b border-slate-800 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-900/50">
-            <Hexagon className="w-6 h-6 text-white" />
+      {/* Header Unificado com Logo + Usuário Discreto */}
+      <div className="flex items-center justify-between px-3.5 py-3 border-b border-slate-800/80 shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="bg-indigo-600 p-2 rounded-xl shadow-md shadow-indigo-950/50 shrink-0 flex items-center justify-center">
+            <Hexagon className="w-5 h-5 text-white stroke-[2.2]" />
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-white tracking-tight leading-none">
+          <div className="min-w-0 flex flex-col justify-center">
+            {/* Topo: NEXO sozinho */}
+            <h1 className="text-base font-black text-white tracking-wide leading-none">
               NEXO
             </h1>
-            <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
-              Smart Life Planner
-            </span>
-          </div>
-        </div>
-        <button
-          onClick={() => setMobileMenuOpen(false)}
-          className="md:hidden text-slate-400 hover:text-white"
-        >
-          <X className="w-6 h-6" />
-        </button>
-      </div>
-
-      {/* User Info */}
-      <div className="p-4 shrink-0">
-        <div className="flex items-center gap-3 px-3 py-2 bg-slate-800/50 rounded-lg border border-slate-700/50 backdrop-blur-sm">
-          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600 overflow-hidden text-xs text-white">
-            {user?.photoURL ? (
-              <img src={user.photoURL} alt="User" />
-            ) : (
-              user?.email?.substring(0, 2).toUpperCase() || "CV"
-            )}
-          </div>
-          <div className="overflow-hidden flex-1 min-w-0">
-            <p
-              className="text-xs font-bold text-white truncate"
-              title={user?.email || "Convidado"}
-            >
-              {user?.email?.split("@")[0] || "Convidado"}
-            </p>
-            <div className="flex items-center gap-1">
-              <div
-                className={`w-1.5 h-1.5 rounded-full ${user ? "bg-emerald-500" : "bg-amber-500"}`}
-              ></div>
-              <p className="text-[10px] text-slate-400">
-                {user ? "Online (Cloud)" : "Offline (Local)"}
-              </p>
+            {/* Embaixo: Nome do usuário e status Cloud na mesma linha */}
+            <div className="flex items-center gap-1.5 mt-1.5 leading-none">
+              <span
+                className="text-xs font-medium text-slate-300 truncate max-w-[105px]"
+                title={user?.email || "Convidado"}
+              >
+                {user?.email?.split("@")[0] || "Convidado"}
+              </span>
+              <span className="text-slate-600 text-[10px] select-none">•</span>
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  user
+                    ? "bg-emerald-400 shadow-sm shadow-emerald-500/50"
+                    : "bg-amber-400"
+                }`}
+              />
+              <span className="text-[11px] font-medium text-slate-400">
+                {user ? "Cloud" : "Local"}
+              </span>
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={onLogout}
-            className="text-slate-400 hover:text-rose-500"
-            title="Sair"
+            className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors flex items-center justify-center"
+            title="Sair / Desconectar"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="md:hidden p-1.5 text-slate-400 hover:text-white rounded-lg"
+          >
+            <X className="w-5 h-5" />
           </button>
         </div>
       </div>
 
       {/* Navigation Links */}
       <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col no-scrollbar space-y-1">
-        <NavItem
-          active={currentView === View.CALENDAR}
-          onClick={() => handleNavClick(View.CALENDAR)}
-          icon={Calendar}
-          label="Agenda"
-        />
-
         {/* Financeiro */}
         <div className="space-y-1">
           <button
@@ -303,14 +294,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <span>Financeiro</span>
             </div>
-            {(openMenus.financeiro ?? isFinanceiroActive) ? (
+            {expandedMenu === "financeiro" ? (
               <ChevronDown className="w-4 h-4 text-slate-400" />
             ) : (
               <ChevronRight className="w-4 h-4 text-slate-400" />
             )}
           </button>
 
-          {(openMenus.financeiro ?? isFinanceiroActive) && (
+          {expandedMenu === "financeiro" && (
             <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950/40 rounded-xl border border-slate-800/60 my-1 animate-fade-in">
               {/* 1. Transações */}
               <button
@@ -395,14 +386,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <span>Investimentos</span>
             </div>
-            {(openMenus.investimentos ?? isInvestimentosActive) ? (
+            {expandedMenu === "investimentos" ? (
               <ChevronDown className="w-4 h-4 text-slate-400" />
             ) : (
               <ChevronRight className="w-4 h-4 text-slate-400" />
             )}
           </button>
 
-          {(openMenus.investimentos ?? isInvestimentosActive) && (
+          {expandedMenu === "investimentos" && (
             <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950/40 rounded-xl border border-slate-800/60 my-1 animate-fade-in">
               {/* 1. Meus Investimentos */}
               <button
@@ -503,14 +494,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <span>Compras</span>
             </div>
-            {(openMenus.compras ?? isComprasActive) ? (
+            {expandedMenu === "compras" ? (
               <ChevronDown className="w-4 h-4 text-slate-400" />
             ) : (
               <ChevronRight className="w-4 h-4 text-slate-400" />
             )}
           </button>
 
-          {(openMenus.compras ?? isComprasActive) && (
+          {expandedMenu === "compras" && (
             <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950/40 rounded-xl border border-slate-800/60 my-1 animate-fade-in">
               {/* 1. Lista de Compras */}
               <button
@@ -579,14 +570,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <span>Planejamento</span>
             </div>
-            {(openMenus.planejamento ?? isProductivityActive) ? (
+            {expandedMenu === "planejamento" ? (
               <ChevronDown className="w-4 h-4 text-slate-400" />
             ) : (
               <ChevronRight className="w-4 h-4 text-slate-400" />
             )}
           </button>
 
-          {(openMenus.planejamento ?? isProductivityActive) && (
+          {expandedMenu === "planejamento" && (
             <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-950/40 rounded-xl border border-slate-800/60 my-1 animate-fade-in">
               {/* 1. Hábitos */}
               <button
@@ -639,14 +630,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <span>Saúde</span>
             </div>
-            {(openMenus.saude ?? isSaudeActive) ? (
+            {expandedMenu === "saude" ? (
               <ChevronDown className="w-4 h-4 text-slate-400" />
             ) : (
               <ChevronRight className="w-4 h-4 text-slate-400" />
             )}
           </button>
 
-          {(openMenus.saude ?? isSaudeActive) && (
+          {expandedMenu === "saude" && (
             <div className="grid grid-cols-1 gap-1.5 p-1.5 bg-slate-950/40 rounded-xl border border-slate-800/60 my-1 animate-fade-in">
               <button
                 onClick={() => handleNavClick(View.TREINO)}
@@ -667,13 +658,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Barra Fixa de Atalhos Rápidos (Foco, Notas, Senhas, Pix) */}
-      <div className="px-3 py-2 border-t border-slate-800 bg-slate-900/95 shrink-0">
-        <div className="grid grid-cols-4 gap-1.5">
-          {/* 1. Modo Foco (Relógio) */}
+      {/* Barra Fixa de Atalhos Rápidos (Agenda, Foco, Notas, Senhas, Pix) */}
+      <div className="px-2.5 py-2 border-t border-slate-800 bg-slate-900/95 shrink-0">
+        <div className="grid grid-cols-5 gap-1">
+          {/* 1. Agenda (Calendário) */}
+          <button
+            onClick={() => handleNavClick(View.CALENDAR)}
+            className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-lg transition-all border group ${
+              currentView === View.CALENDAR
+                ? "bg-blue-500/20 border-blue-500/50 text-blue-300 shadow-sm"
+                : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-blue-300 hover:border-slate-700"
+            }`}
+            title="Agenda & Calendário"
+          >
+            <Calendar className="w-3.5 h-3.5 text-blue-400 group-hover:scale-105 transition-transform" />
+            <span className="text-[9px] mt-0.5 tracking-tight font-medium truncate">Agenda</span>
+          </button>
+
+          {/* 2. Modo Foco (Relógio) */}
           <button
             onClick={openModal}
-            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all border group relative ${
+            className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-lg transition-all border group relative ${
               isActive
                 ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-400 shadow-sm shadow-emerald-950/40"
                 : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-emerald-400 hover:border-slate-700"
@@ -697,10 +702,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </span>
           </button>
 
-          {/* 2. Anotações (NEXO Notes) */}
+          {/* 3. Anotações (NEXO Notes) */}
           <button
             onClick={() => handleNavClick(View.NOTES)}
-            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all border group ${
+            className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-lg transition-all border group ${
               currentView === View.NOTES
                 ? "bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-sm"
                 : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-amber-300 hover:border-slate-700"
@@ -711,10 +716,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="text-[9px] mt-0.5 tracking-tight font-medium truncate">Notas</span>
           </button>
 
-          {/* 3. Cofre de Senhas */}
+          {/* 4. Cofre de Senhas */}
           <button
             onClick={() => handleNavClick(View.PASSWORDS)}
-            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all border group ${
+            className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-lg transition-all border group ${
               currentView === View.PASSWORDS
                 ? "bg-sky-500/20 border-sky-500/50 text-sky-300 shadow-sm"
                 : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-sky-300 hover:border-slate-700"
@@ -725,10 +730,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="text-[9px] mt-0.5 tracking-tight font-medium truncate">Senhas</span>
           </button>
 
-          {/* 4. Chaves Pix */}
+          {/* 5. Chaves Pix */}
           <button
             onClick={() => handleNavClick(View.PIX_KEYS)}
-            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all border group ${
+            className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-lg transition-all border group ${
               currentView === View.PIX_KEYS
                 ? "bg-teal-500/20 border-teal-500/50 text-teal-300 shadow-sm"
                 : "bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-teal-300 hover:border-slate-700"

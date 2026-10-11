@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Target,
   Calendar,
@@ -14,7 +14,9 @@ import {
   CheckSquare,
   Activity,
   LineChart,
-  ArrowUp
+  ArrowUp,
+  ArrowLeft,
+  ArrowRight
 } from "lucide-react";
 import {
   View,
@@ -90,6 +92,71 @@ const getInitialView = (): View => {
   return View.TRANSACTIONS;
 };
 
+export const getViewTitle = (view: View): string => {
+  switch (view) {
+    case View.TRANSACTIONS:
+      return "Transações";
+    case View.SUBSCRIPTIONS:
+      return "Assinaturas";
+    case View.DEBTS:
+      return "Dívidas";
+    case View.BUDGETS:
+      return "Orçamentos";
+    case View.PIX_KEYS:
+      return "Chaves Pix";
+    case View.FINANCEIRO_DASHBOARD:
+      return "Financeiro";
+    case View.INVESTMENTS:
+      return "Meus Investimentos";
+    case View.STOCKS_GROWTH:
+      return "Motor de Crescimento";
+    case View.SNOWBALL:
+      return "Efeito Bola de Neve";
+    case View.FINANCIAL_CHALLENGES:
+      return "Desafios Financeiros";
+    case View.WEALTH_PLANNER:
+      return "Aposentadoria";
+    case View.MERCADO_ESPORTIVO:
+      return "Mercado Esportivo";
+    case View.INVESTMENTS_DASHBOARD:
+      return "Investimentos";
+    case View.SHOPPING_LIST:
+      return "Lista de Mercado";
+    case View.INVENTORY:
+      return "Despensa & Estoque";
+    case View.KANBAN:
+      return "Sonhos de Consumo";
+    case View.NOTES:
+      return "Notas Rápidas";
+    case View.PASSWORDS:
+      return "Cofre de Senhas";
+    case View.PRODUCTIVITY:
+      return "Foco (Pomodoro)";
+    case View.WORK_GOALS:
+      return "Trabalho";
+    case View.DAILY_ROUTINES:
+      return "Rotinas Diárias";
+    case View.PLANEJAMENTO_DASHBOARD:
+      return "Planejamento";
+    case View.CALENDAR:
+      return "Agenda";
+    case View.TREINO:
+      return "Ficha de Treino";
+    case View.SAUDE_DASHBOARD:
+      return "Saúde & Treino";
+    case View.WALLETS:
+      return "Minhas Carteiras";
+    case View.SETTINGS:
+      return "Configurações";
+    case View.AI_ASSISTANT:
+      return "Assistente IA";
+    case View.DASHBOARD:
+      return "Transações";
+    default:
+      return "Painel";
+  }
+};
+
 const App: React.FC = () => {
   // Auth State
   const [user, setUser] = useState<User | null>(null);
@@ -101,6 +168,91 @@ const App: React.FC = () => {
 
   // UI State - persisted across page refreshes
   const [currentView, setCurrentView] = useState<View>(getInitialView);
+
+  // Navigation History Stack with Session Persistence
+  const [navigationHistory, setNavigationHistory] = useState<View[]>(() => {
+    const init = getInitialView();
+    try {
+      const raw = sessionStorage.getItem("nexo_nav_history");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const valid = parsed.filter((v) => Object.values(View).includes(v));
+          if (valid.length > 0) return valid;
+        }
+      }
+    } catch (e) {}
+    return [init];
+  });
+
+  const [historyIndex, setHistoryIndex] = useState<number>(() => {
+    try {
+      const rawIdx = sessionStorage.getItem("nexo_nav_index");
+      if (rawIdx !== null) {
+        const parsed = parseInt(rawIdx, 10);
+        if (!isNaN(parsed) && parsed >= 0) return parsed;
+      }
+    } catch (e) {}
+    return 0;
+  });
+
+  // Save navigation history
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("nexo_nav_history", JSON.stringify(navigationHistory));
+      sessionStorage.setItem("nexo_nav_index", String(historyIndex));
+    } catch (e) {}
+  }, [navigationHistory, historyIndex]);
+
+  const canGoBack = historyIndex > 0;
+  const previousView = canGoBack ? navigationHistory[historyIndex - 1] : null;
+  const canGoForward = historyIndex < navigationHistory.length - 1;
+  const nextView = canGoForward ? navigationHistory[historyIndex + 1] : null;
+
+  const navigateTo = useCallback(
+    (targetView: View, replace = false) => {
+      let finalTarget = targetView;
+      if (finalTarget === View.DASHBOARD) finalTarget = View.TRANSACTIONS;
+      if (finalTarget === currentView) return;
+
+      if (replace) {
+        setNavigationHistory((prev) => {
+          const copy = [...prev];
+          copy[historyIndex] = finalTarget;
+          return copy;
+        });
+        setCurrentView(finalTarget);
+        return;
+      }
+
+      setNavigationHistory((prev) => {
+        const upToCurrent = prev.slice(0, historyIndex + 1);
+        return [...upToCurrent, finalTarget];
+      });
+      setHistoryIndex((prev) => prev + 1);
+      setCurrentView(finalTarget);
+    },
+    [currentView, historyIndex]
+  );
+
+  const handleGoBack = useCallback(() => {
+    if (historyIndex > 0) {
+      const prevIdx = historyIndex - 1;
+      const target = navigationHistory[prevIdx];
+      setHistoryIndex(prevIdx);
+      setCurrentView(target);
+    }
+  }, [historyIndex, navigationHistory]);
+
+  const handleGoForward = useCallback(() => {
+    if (historyIndex < navigationHistory.length - 1) {
+      const nextIdx = historyIndex + 1;
+      const target = navigationHistory[nextIdx];
+      setHistoryIndex(nextIdx);
+      setCurrentView(target);
+    }
+  }, [historyIndex, navigationHistory]);
+
   const [privacyMode, setPrivacyMode] = useState<boolean>(() => {
     try {
       return localStorage.getItem("nexo_privacy_mode") === "true";
@@ -128,7 +280,7 @@ const App: React.FC = () => {
       localStorage.setItem("nexo_current_view", currentView);
       const targetHash = `#${currentView.toLowerCase()}`;
       if (window.location.hash !== targetHash) {
-        window.history.replaceState(null, "", targetHash);
+        window.history.pushState(null, "", targetHash);
       }
       if (mainRef.current) {
         mainRef.current.scrollTo({ top: 0, behavior: "smooth" });
@@ -163,14 +315,19 @@ const App: React.FC = () => {
       try {
         const rawHash = window.location.hash.replace(/^#\/?/, "").trim();
         const upperHash = rawHash.toUpperCase();
-        const match = Object.values(View).find(
+        let match = Object.values(View).find(
           (v) => v.toUpperCase() === upperHash
         );
+        if (match === View.DASHBOARD) match = View.TRANSACTIONS;
         if (match && match !== currentView) {
-          if (match === View.DASHBOARD) {
-            setCurrentView(View.TRANSACTIONS);
-          } else {
+          if (historyIndex > 0 && navigationHistory[historyIndex - 1] === match) {
+            setHistoryIndex((prev) => prev - 1);
             setCurrentView(match);
+          } else if (historyIndex < navigationHistory.length - 1 && navigationHistory[historyIndex + 1] === match) {
+            setHistoryIndex((prev) => prev + 1);
+            setCurrentView(match);
+          } else {
+            navigateTo(match);
           }
         }
       } catch (e) {
@@ -180,7 +337,7 @@ const App: React.FC = () => {
 
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
-  }, [currentView]);
+  }, [currentView, historyIndex, navigationHistory, navigateTo]);
 
   // Persist privacy and dark mode settings
   useEffect(() => {
@@ -412,7 +569,7 @@ const App: React.FC = () => {
   };
 
   const triggerQuickAction = (view: View) => {
-    setCurrentView(view);
+    navigateTo(view);
     setMobileMenuOpen(false);
     setTimeout(() => setQuickActionSignal(Date.now()), 50);
   };
@@ -455,7 +612,7 @@ const App: React.FC = () => {
       return (
         <FinanceiroView
           currentView={currentView}
-          onNavigate={setCurrentView}
+          onNavigate={navigateTo}
           data={data}
           actions={actions}
           privacyMode={privacyMode}
@@ -479,7 +636,7 @@ const App: React.FC = () => {
       return (
         <InvestimentosView
           currentView={currentView}
-          onNavigate={setCurrentView}
+          onNavigate={navigateTo}
           data={data}
           actions={actions}
           privacyMode={privacyMode}
@@ -494,7 +651,7 @@ const App: React.FC = () => {
       return (
         <ComprasView
           currentView={currentView}
-          onNavigate={setCurrentView}
+          onNavigate={navigateTo}
           data={data}
           actions={actions}
           privacyMode={privacyMode}
@@ -509,7 +666,7 @@ const App: React.FC = () => {
       return (
         <PlanejamentoView
           currentView={currentView}
-          onNavigate={setCurrentView}
+          onNavigate={navigateTo}
           data={data}
           actions={actions}
           privacyMode={privacyMode}
@@ -541,14 +698,8 @@ const App: React.FC = () => {
             onAddTask={actions.addTask}
             onUpdateTask={actions.updateTask}
             onDeleteTask={actions.deleteTask}
-            
-            
-            
-            
-            
-            
             privacyMode={privacyMode}
-            onNavigate={setCurrentView}
+            onNavigate={navigateTo}
           />
         </div>
       );
@@ -559,7 +710,7 @@ const App: React.FC = () => {
       return (
         <SaudeView
           currentView={currentView}
-          onNavigate={setCurrentView}
+          onNavigate={navigateTo}
           data={data}
           actions={actions}
         />
@@ -570,7 +721,7 @@ const App: React.FC = () => {
     return (
       <FinanceiroView
         currentView={View.TRANSACTIONS}
-        onNavigate={setCurrentView}
+        onNavigate={navigateTo}
         data={data}
         actions={actions}
         privacyMode={privacyMode}
@@ -608,7 +759,7 @@ const App: React.FC = () => {
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
         currentView={currentView}
-        onNavigate={(view) => setCurrentView(view)}
+        onNavigate={navigateTo}
         onLogout={handleLogout}
         privacyMode={privacyMode}
         setPrivacyMode={setPrivacyMode}
@@ -635,14 +786,35 @@ const App: React.FC = () => {
         className="flex-1 p-4 md:p-8 pt-20 md:pt-8 pb-8 overflow-y-auto h-screen scroll-smooth relative"
       >
         <div className="md:hidden fixed top-0 left-0 right-0 bg-slate-900 p-4 border-b border-slate-800 z-30 flex items-center justify-between shadow-md">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setMobileMenuOpen(true)}
               className="text-slate-300 hover:text-white p-1"
+              title="Abrir Menu"
             >
               <Menu className="w-6 h-6" />
             </button>
-            <div className="flex items-center gap-2">
+
+            {/* Botão Voltar Mobile */}
+            <button
+              onClick={handleGoBack}
+              disabled={!canGoBack}
+              className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
+                canGoBack
+                  ? "text-white bg-slate-800 border-slate-700 hover:bg-slate-700 active:scale-95 shadow-sm"
+                  : "text-slate-600 border-slate-800/40 bg-slate-900/40 opacity-40 cursor-not-allowed"
+              }`}
+              title={
+                canGoBack && previousView
+                  ? `Voltar para: ${getViewTitle(previousView)}`
+                  : "Nenhuma tela anterior"
+              }
+              aria-label="Voltar para a tela anterior"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2 ml-1">
               <div className="bg-indigo-600 p-1.5 rounded-lg">
                 <Hexagon className="w-4 h-4 text-white" />
               </div>
@@ -677,6 +849,59 @@ const App: React.FC = () => {
         </div>
 
         <div className="max-w-7xl mx-auto animate-fade-in">
+          {/* Barra Universal Superior com Botão Voltar em Todas as Telas */}
+          <div className="mb-5 flex items-center justify-between gap-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                onClick={handleGoBack}
+                disabled={!canGoBack}
+                className={`group flex items-center gap-2 px-3 py-1.5 rounded-xl border text-sm font-semibold transition-all ${
+                  canGoBack
+                    ? "bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 hover:bg-indigo-600 hover:border-indigo-600 hover:text-white dark:hover:bg-indigo-600 dark:hover:border-indigo-600 dark:hover:text-white cursor-pointer active:scale-95 shadow-xs"
+                    : "bg-slate-100/50 dark:bg-slate-800/40 border-slate-200/40 dark:border-slate-800/40 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-45"
+                }`}
+                title={
+                  canGoBack && previousView
+                    ? `Voltar para: ${getViewTitle(previousView)}`
+                    : "Nenhuma tela anterior acessada"
+                }
+              >
+                <ArrowLeft className={`w-4 h-4 transition-transform ${canGoBack ? "group-hover:-translate-x-0.5" : ""}`} />
+                <span>Voltar</span>
+              </button>
+
+              {canGoForward && (
+                <button
+                  onClick={handleGoForward}
+                  className="group flex items-center gap-2 px-3 py-1.5 rounded-xl border text-sm font-semibold transition-all bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 hover:bg-indigo-600 hover:border-indigo-600 hover:text-white dark:hover:bg-indigo-600 dark:hover:border-indigo-600 dark:hover:text-white cursor-pointer active:scale-95 shadow-xs"
+                  title={`Avançar para: ${nextView ? getViewTitle(nextView) : ""}`}
+                >
+                  <span>Avançar</span>
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                </button>
+              )}
+
+              {canGoBack && previousView && (
+                <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
+                  <span className="text-slate-400 dark:text-slate-500">Tela anterior:</span>
+                  <button
+                    onClick={handleGoBack}
+                    className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                  >
+                    {getViewTitle(previousView)}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 text-xs">
+              <span className="hidden md:inline text-slate-400 dark:text-slate-500">Você está em:</span>
+              <span className="font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                {getViewTitle(currentView)}
+              </span>
+            </div>
+          </div>
+
           {renderContent()}
         </div>
 

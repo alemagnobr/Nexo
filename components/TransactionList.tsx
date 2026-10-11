@@ -100,7 +100,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [paymentFilter, setPaymentFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
-  const [showBudgetsPanel, setShowBudgetsPanel] = useState(false);
+  const [expandedTopPanel, setExpandedTopPanel] = useState<'none' | 'wallets' | 'budgets'>('none');
   
   // --- EDITING & RECURRENCE STATE ---
   const [editingId, setEditingId] = useState<string | null>(null); // For full form
@@ -1136,324 +1136,328 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
         </div>
       )}
 
-      {/* Wallets & Budgets Top Panels */}
-      <div className="space-y-3 mb-6">
-        {onAddWallet && onUpdateWallet && onDeleteWallet && (
-          <WalletsView 
-            wallets={wallets || []}
-            transactions={transactions}
-            categories={categories}
-            onAdd={onAddWallet}
-            onUpdate={onUpdateWallet}
-            onDelete={onDeleteWallet}
-            onTransfer={handleTransfer}
-            onUpdateTransaction={onUpdate}
-            onAddTransaction={onAdd}
-          />
-        )}
-
-        {/* Metas de Investimento e Tetos de Gastos (logo abaixo de Minhas Contas) */}
-        {monthBudgetData.hasAnyBudget && (
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden animate-fade-in transition-all">
-            <div className={`px-3.5 md:px-5 py-2.5 bg-slate-50/70 dark:bg-slate-900/40 ${showBudgetsPanel ? 'border-b border-slate-100 dark:border-slate-700/60' : ''} flex items-center justify-between`}>
-              <div className="flex items-center gap-2.5">
-                <div className="w-6 h-6 rounded-lg bg-teal-500/10 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center">
+      {/* Wallets & Budgets Top Panels - Lado a lado no cabeçalho e expansão ocupando a largura total dos dois */}
+      {(() => {
+        const budgetsHeader = monthBudgetData.hasAnyBudget ? (
+          <div className={`rounded-2xl border transition-all duration-200 overflow-hidden shadow-sm hover:shadow ${
+            expandedTopPanel === 'budgets' 
+              ? 'border-teal-500 dark:border-teal-400 ring-2 ring-teal-500/20 shadow-md shadow-teal-500/10 bg-white dark:bg-slate-800' 
+              : 'border-teal-200/90 dark:border-teal-900/60 hover:border-teal-300 dark:hover:border-teal-800 bg-gradient-to-r from-teal-50/60 via-white to-white dark:from-teal-950/30 dark:via-slate-800 dark:to-slate-800'
+          }`}>
+            <div 
+              onClick={() => setExpandedTopPanel(prev => prev === 'budgets' ? 'none' : 'budgets')}
+              className="px-3.5 md:px-5 py-2.5 min-h-[48px] flex items-center justify-between cursor-pointer select-none group"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-teal-500/15 dark:bg-teal-500/25 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 border border-teal-500/20 group-hover:scale-105 transition-transform shadow-xs">
                   <Target className="w-3.5 h-3.5" />
                 </div>
-                <div>
-                  <h3 className="text-xs md:text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                    Metas & Orçamentos do Mês
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                <div className="min-w-0">
+                  <h3 className="text-xs md:text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2 truncate">
+                    Metas & Orçamentos
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-100/90 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 border border-teal-200/60 dark:border-teal-800/60 shrink-0">
                       {monthBudgetData.investmentGoals.length} meta{monthBudgetData.investmentGoals.length !== 1 ? 's' : ''} • {monthBudgetData.expenseBudgets.length} teto{monthBudgetData.expenseBudgets.length !== 1 ? 's' : ''}
                     </span>
                   </h3>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
-                  onClick={() => onNavigate(View.BUDGETS)}
-                  className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
-                  title="Ir para tela de Orçamentos"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedTopPanel(prev => prev === 'budgets' ? 'none' : 'budgets');
+                  }}
+                  className="p-1 rounded-lg text-slate-400 group-hover:text-teal-600 dark:group-hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-slate-700 transition-colors"
+                  title={expandedTopPanel === 'budgets' ? "Ocultar painel" : "Expandir painel"}
                 >
-                  Gerenciar <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setShowBudgetsPanel(prev => !prev)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                  title={showBudgetsPanel ? "Ocultar painel" : "Expandir painel"}
-                >
-                  {showBudgetsPanel ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  {expandedTopPanel === 'budgets' ? <ChevronUp className="w-4 h-4 text-teal-600 dark:text-teal-400" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
               </div>
             </div>
+          </div>
+        ) : null;
 
-            {showBudgetsPanel && (
-              <div className="p-3 md:p-4">
-                {monthBudgetData.investmentGoals.length > 0 && monthBudgetData.expenseBudgets.length > 0 ? (
-                  /* Layout Lado a Lado (2 Colunas): Preenche a tela de forma balanceada */
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-5">
-                    {/* Coluna 1: Metas de Aporte */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-teal-700 dark:text-teal-400 uppercase tracking-wider flex items-center gap-1.5">
-                          <Sparkles className="w-3 h-3" /> Metas de Aporte & Investimentos
-                        </span>
-                        <button
-                          onClick={() => onNavigate(View.INVESTMENTS)}
-                          className="text-[10px] font-medium text-teal-600 dark:text-teal-400 hover:underline"
-                        >
-                          Ver Investimentos
-                        </button>
-                      </div>
+        const budgetsContent = monthBudgetData.hasAnyBudget ? (
+          <div>
+            {monthBudgetData.investmentGoals.length > 0 && monthBudgetData.expenseBudgets.length > 0 ? (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {/* Coluna 1: Metas de Aporte */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-teal-700 dark:text-teal-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3" /> Metas de Aporte & Investimentos
+                    </span>
+                    <button
+                      onClick={() => onNavigate(View.INVESTMENTS)}
+                      className="text-[10px] font-medium text-teal-600 dark:text-teal-400 hover:underline"
+                    >
+                      Ver Investimentos
+                    </button>
+                  </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-2">
-                        {monthBudgetData.investmentGoals.map(goal => (
-                          <div 
-                            key={goal.id} 
-                            className={`p-2.5 rounded-xl border transition-all ${
-                              goal.isCompleted 
-                                ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/50' 
-                                : 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-700/60'
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {monthBudgetData.investmentGoals.map(goal => (
+                      <div 
+                        key={goal.id} 
+                        className={`p-2.5 rounded-xl border transition-all ${
+                          goal.isCompleted 
+                            ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/50' 
+                            : 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-700/60'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-bold text-xs text-slate-800 dark:text-slate-200 truncate">
+                              {goal.category}
+                            </span>
+                            {goal.targetInvestmentId && goal.targetInvestmentId !== 'ALL' && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 font-semibold truncate max-w-[85px]">
+                                {investments.find(i => i.id === goal.targetInvestmentId)?.name || 'Ativo'}
+                              </span>
+                            )}
+                          </div>
+                          {goal.isCompleted ? (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500 text-white flex items-center gap-0.5 shadow-sm shrink-0">
+                              <Check className="w-2.5 h-2.5" /> Batida!
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 px-1.5 py-0.5 rounded-full shrink-0">
+                              Falta {formatValue(goal.remaining)}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-1">
+                          <div
+                            className={`h-full transition-all duration-500 rounded-full ${
+                              goal.isCompleted ? 'bg-emerald-500' : 'bg-teal-500'
                             }`}
-                          >
-                            <div className="flex items-center justify-between gap-1 mb-1">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="font-bold text-xs text-slate-800 dark:text-slate-200 truncate">
-                                  {goal.category}
-                                </span>
-                                {goal.targetInvestmentId && goal.targetInvestmentId !== 'ALL' && (
-                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 font-semibold truncate max-w-[85px]">
-                                    {investments.find(i => i.id === goal.targetInvestmentId)?.name || 'Ativo'}
-                                  </span>
-                                )}
-                              </div>
-                              {goal.isCompleted ? (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500 text-white flex items-center gap-0.5 shadow-sm shrink-0">
-                                  <Check className="w-2.5 h-2.5" /> Batida!
-                                </span>
-                              ) : (
-                                <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 px-1.5 py-0.5 rounded-full shrink-0">
-                                  Falta {formatValue(goal.remaining)}
+                            style={{ width: `${Math.min(100, goal.percent)}%` }}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                          <span>Aportado: <strong className="text-slate-700 dark:text-slate-200">{formatValue(goal.progress)}</strong></span>
+                          <span>Meta: <strong className="text-slate-700 dark:text-slate-200">{formatValue(goal.limit)}</strong> ({goal.percent}%)</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Coluna 2: Tetos de Gastos */}
+                <div className="space-y-2.5 pt-3 xl:pt-0 border-t xl:border-t-0 xl:border-l border-slate-100 dark:border-slate-700/60 xl:pl-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Layers className="w-3 h-3" /> Tetos de Gastos por Categoria
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {monthBudgetData.expenseBudgets.map(b => (
+                      <div 
+                        key={b.id} 
+                        className={`p-2.5 rounded-xl border text-xs transition-all ${
+                          b.isExceeded 
+                            ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/50' 
+                            : b.isWarning 
+                            ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50' 
+                            : 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-700/60'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className="font-bold text-xs text-slate-800 dark:text-slate-200 truncate pr-1">
+                            {b.category}
+                          </span>
+                          <span className={`text-[10px] font-black shrink-0 ${
+                            b.isExceeded 
+                              ? 'text-rose-600 dark:text-rose-400' 
+                              : b.isWarning 
+                              ? 'text-amber-600 dark:text-amber-400' 
+                              : 'text-slate-500 dark:text-slate-400'
+                          }`}>
+                            {b.percent}%
+                          </span>
+                        </div>
+
+                        <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-1">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              b.isExceeded ? 'bg-rose-500' : b.isWarning ? 'bg-amber-500' : 'bg-indigo-500'
+                            }`}
+                            style={{ width: `${Math.min(100, b.percent)}%` }}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                          <span>Gasto: <strong className="text-slate-700 dark:text-slate-200">{formatValue(b.spent)}</strong></span>
+                          <span className="font-semibold">{b.isExceeded ? `+${formatValue(b.spent - b.limit)}` : `Resta ${formatValue(b.remaining)}`}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Apenas uma das categorias existe */
+              <div className="space-y-3">
+                {monthBudgetData.investmentGoals.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-bold text-teal-700 dark:text-teal-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="w-3 h-3" /> Metas de Aporte & Investimentos
+                      </span>
+                      <button
+                        onClick={() => onNavigate(View.INVESTMENTS)}
+                        className="text-[10px] font-medium text-teal-600 dark:text-teal-400 hover:underline"
+                      >
+                        Ver Investimentos
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                      {monthBudgetData.investmentGoals.map(goal => (
+                        <div 
+                          key={goal.id} 
+                          className={`p-2.5 rounded-xl border transition-all ${
+                            goal.isCompleted 
+                              ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/50' 
+                              : 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-700/60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1 mb-1">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-bold text-xs text-slate-800 dark:text-slate-200 truncate">
+                                {goal.category}
+                              </span>
+                              {goal.targetInvestmentId && goal.targetInvestmentId !== 'ALL' && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 font-semibold truncate max-w-[85px]">
+                                  {investments.find(i => i.id === goal.targetInvestmentId)?.name || 'Ativo'}
                                 </span>
                               )}
                             </div>
-
-                            <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-1">
-                              <div
-                                className={`h-full transition-all duration-500 rounded-full ${
-                                  goal.isCompleted ? 'bg-emerald-500' : 'bg-teal-500'
-                                }`}
-                                style={{ width: `${Math.min(100, goal.percent)}%` }}
-                              />
-                            </div>
-
-                            <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                              <span>Aportado: <strong className="text-slate-700 dark:text-slate-200">{formatValue(goal.progress)}</strong></span>
-                              <span>Meta: <strong className="text-slate-700 dark:text-slate-200">{formatValue(goal.limit)}</strong> ({goal.percent}%)</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Coluna 2: Tetos de Gastos */}
-                    <div className="space-y-2 pt-2 lg:pt-0 border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-700/60 lg:pl-5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                          <Layers className="w-3 h-3" /> Tetos de Gastos por Categoria
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-2">
-                        {monthBudgetData.expenseBudgets.map(b => (
-                          <div 
-                            key={b.id} 
-                            className={`p-2.5 rounded-xl border text-xs transition-all ${
-                              b.isExceeded 
-                                ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/50' 
-                                : b.isWarning 
-                                ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50' 
-                                : 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-700/60'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-1 mb-1">
-                              <span className="font-bold text-xs text-slate-800 dark:text-slate-200 truncate pr-1">
-                                {b.category}
+                            {goal.isCompleted ? (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500 text-white flex items-center gap-0.5 shadow-sm shrink-0">
+                                <Check className="w-2.5 h-2.5" /> Batida!
                               </span>
-                              <span className={`text-[10px] font-black shrink-0 ${
-                                b.isExceeded 
-                                  ? 'text-rose-600 dark:text-rose-400' 
-                                  : b.isWarning 
-                                  ? 'text-amber-600 dark:text-amber-400' 
-                                  : 'text-slate-500 dark:text-slate-400'
-                              }`}>
-                                {b.percent}%
+                            ) : (
+                              <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 px-1.5 py-0.5 rounded-full shrink-0">
+                                Falta {formatValue(goal.remaining)}
                               </span>
-                            </div>
-
-                            <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-1">
-                              <div 
-                                className={`h-full rounded-full transition-all duration-300 ${
-                                  b.isExceeded ? 'bg-rose-500' : b.isWarning ? 'bg-amber-500' : 'bg-indigo-500'
-                                }`}
-                                style={{ width: `${Math.min(100, b.percent)}%` }}
-                              />
-                            </div>
-
-                            <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                              <span>Gasto: <strong className="text-slate-700 dark:text-slate-200">{formatValue(b.spent)}</strong></span>
-                              <span className="font-semibold">{b.isExceeded ? `+${formatValue(b.spent - b.limit)}` : `Resta ${formatValue(b.remaining)}`}</span>
-                            </div>
+                            )}
                           </div>
-                        ))}
-                      </div>
+                          <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-1">
+                            <div
+                              className={`h-full transition-all duration-500 rounded-full ${
+                                goal.isCompleted ? 'bg-emerald-500' : 'bg-teal-500'
+                              }`}
+                              style={{ width: `${Math.min(100, goal.percent)}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                            <span>Aportado: <strong className="text-slate-700 dark:text-slate-200">{formatValue(goal.progress)}</strong></span>
+                            <span>Meta: <strong className="text-slate-700 dark:text-slate-200">{formatValue(goal.limit)}</strong> ({goal.percent}%)</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ) : (
-                  /* Apenas uma das categorias existe */
-                  <div className="space-y-3">
-                    {monthBudgetData.investmentGoals.length > 0 && (
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[11px] font-bold text-teal-700 dark:text-teal-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <Sparkles className="w-3 h-3" /> Metas de Aporte & Investimentos
-                          </span>
-                          <button
-                            onClick={() => onNavigate(View.INVESTMENTS)}
-                            className="text-[10px] font-medium text-teal-600 dark:text-teal-400 hover:underline"
-                          >
-                            Ver Investimentos
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
-                          {monthBudgetData.investmentGoals.map(goal => (
-                            <div 
-                              key={goal.id} 
-                              className={`p-2.5 rounded-xl border transition-all ${
-                                goal.isCompleted 
-                                  ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/50' 
-                                  : 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-700/60'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-1 mb-1">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <span className="font-bold text-xs text-slate-800 dark:text-slate-200 truncate">
-                                    {goal.category}
-                                  </span>
-                                  {goal.targetInvestmentId && goal.targetInvestmentId !== 'ALL' && (
-                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 font-semibold truncate max-w-[85px]">
-                                      {investments.find(i => i.id === goal.targetInvestmentId)?.name || 'Ativo'}
-                                    </span>
-                                  )}
-                                </div>
-                                {goal.isCompleted ? (
-                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500 text-white flex items-center gap-0.5 shadow-sm shrink-0">
-                                    <Check className="w-2.5 h-2.5" /> Batida!
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 px-1.5 py-0.5 rounded-full shrink-0">
-                                    Falta {formatValue(goal.remaining)}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-1">
-                                <div
-                                  className={`h-full transition-all duration-500 rounded-full ${
-                                    goal.isCompleted ? 'bg-emerald-500' : 'bg-teal-500'
-                                  }`}
-                                  style={{ width: `${Math.min(100, goal.percent)}%` }}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                                <span>Aportado: <strong className="text-slate-700 dark:text-slate-200">{formatValue(goal.progress)}</strong></span>
-                                <span>Meta: <strong className="text-slate-700 dark:text-slate-200">{formatValue(goal.limit)}</strong> ({goal.percent}%)</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                )}
 
-                    {monthBudgetData.expenseBudgets.length > 0 && (
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <Layers className="w-3 h-3" /> Tetos de Gastos por Categoria
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
-                          {monthBudgetData.expenseBudgets.map(b => (
+                {monthBudgetData.expenseBudgets.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Layers className="w-3 h-3" /> Tetos de Gastos por Categoria
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                      {monthBudgetData.expenseBudgets.map(b => (
+                        <div 
+                          key={b.id} 
+                          className={`p-2.5 rounded-xl border text-xs transition-all ${
+                            b.isExceeded 
+                              ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/50' 
+                              : b.isWarning 
+                              ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50' 
+                              : 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-700/60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1 mb-1">
+                            <span className="font-bold text-xs text-slate-800 dark:text-slate-200 truncate pr-1">
+                              {b.category}
+                            </span>
+                            <span className={`text-[10px] font-black shrink-0 ${
+                              b.isExceeded 
+                                ? 'text-rose-600 dark:text-rose-400' 
+                                : b.isWarning 
+                                ? 'text-amber-600 dark:text-amber-400' 
+                                : 'text-slate-500 dark:text-slate-400'
+                            }`}>
+                              {b.percent}%
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-1">
                             <div 
-                              key={b.id} 
-                              className={`p-2.5 rounded-xl border text-xs transition-all ${
-                                b.isExceeded 
-                                  ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/50' 
-                                  : b.isWarning 
-                                  ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50' 
-                                  : 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-700/60'
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                b.isExceeded ? 'bg-rose-500' : b.isWarning ? 'bg-amber-500' : 'bg-indigo-500'
                               }`}
-                            >
-                              <div className="flex items-center justify-between gap-1 mb-1">
-                                <span className="font-bold text-xs text-slate-800 dark:text-slate-200 truncate pr-1">
-                                  {b.category}
-                                </span>
-                                <span className={`text-[10px] font-black shrink-0 ${
-                                  b.isExceeded 
-                                    ? 'text-rose-600 dark:text-rose-400' 
-                                    : b.isWarning 
-                                    ? 'text-amber-600 dark:text-amber-400' 
-                                    : 'text-slate-500 dark:text-slate-400'
-                                }`}>
-                                  {b.percent}%
-                                </span>
-                              </div>
-                              <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-1">
-                                <div 
-                                  className={`h-full rounded-full transition-all duration-300 ${
-                                    b.isExceeded ? 'bg-rose-500' : b.isWarning ? 'bg-amber-500' : 'bg-indigo-500'
-                                  }`}
-                                  style={{ width: `${Math.min(100, b.percent)}%` }}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                                <span>Gasto: <strong className="text-slate-700 dark:text-slate-200">{formatValue(b.spent)}</strong></span>
-                                <span className="font-semibold">{b.isExceeded ? `+${formatValue(b.spent - b.limit)}` : `Resta ${formatValue(b.remaining)}`}</span>
-                              </div>
-                            </div>
-                          ))}
+                              style={{ width: `${Math.min(100, b.percent)}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                            <span>Gasto: <strong className="text-slate-700 dark:text-slate-200">{formatValue(b.spent)}</strong></span>
+                            <span className="font-semibold">{b.isExceeded ? `+${formatValue(b.spent - b.limit)}` : `Resta ${formatValue(b.remaining)}`}</span>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
             )}
           </div>
-        )}
-      </div>
+        ) : null;
+
+        if (onAddWallet && onUpdateWallet && onDeleteWallet) {
+          return (
+            <WalletsView 
+              wallets={wallets || []}
+              transactions={transactions}
+              categories={categories}
+              onAdd={onAddWallet}
+              onUpdate={onUpdateWallet}
+              onDelete={onDeleteWallet}
+              onTransfer={handleTransfer}
+              onUpdateTransaction={onUpdate}
+              onAddTransaction={onAdd}
+              isExpanded={expandedTopPanel === 'wallets'}
+              onToggleExpand={() => setExpandedTopPanel(prev => prev === 'wallets' ? 'none' : 'wallets')}
+              budgetsHeader={budgetsHeader}
+              budgetsContent={budgetsContent}
+              isBudgetsExpanded={expandedTopPanel === 'budgets'}
+            />
+          );
+        }
+
+        if (monthBudgetData.hasAnyBudget) {
+          return (
+            <div className="mb-6 space-y-3">
+              {budgetsHeader}
+              {expandedTopPanel === 'budgets' && (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden animate-fade-in p-3 md:p-4">
+                  {budgetsContent}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        return null;
+      })()}
 
       {/* 1. TOP BAR: Title, Search, Actions */}
       <div className="flex flex-col gap-4">
-          {lateBillsCount > 0 && (
-              <div className="flex items-center justify-between bg-rose-50 dark:bg-rose-900/20 p-3 rounded-xl border border-rose-100 dark:border-rose-800/30 animate-fade-in">
-                  <div className="flex items-center gap-2">
-                      <AlertCircle className="w-5 h-5 text-rose-500" />
-                      <div>
-                          <span className="text-sm text-rose-700 dark:text-rose-400 font-bold block">Atenção: Contas Atrasadas</span>
-                          <span className="text-xs text-rose-600 dark:text-rose-400/80">
-                              Você possui {lateBillsCount} {lateBillsCount === 1 ? 'conta atrasada' : 'contas atrasadas'}.
-                          </span>
-                      </div>
-                  </div>
-                  <button 
-                      onClick={() => setViewFilter('late')}
-                      className="px-3 py-1.5 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-lg hover:bg-rose-200 dark:hover:bg-rose-900/60 transition-colors"
-                  >
-                      Ver Atrasadas
-                  </button>
-              </div>
-          )}
           {todayBillsCount > 0 && (
               <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 p-3 rounded-xl border border-amber-200 dark:border-amber-800/30 animate-fade-in">
                   <div className="flex items-center gap-2">
@@ -1476,15 +1480,15 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
                   </button>
               </div>
           )}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-white hidden md:block">Transações</h2>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-white hidden md:block shrink-0">Transações</h2>
             
-            <div className="flex flex-1 w-full md:w-auto gap-3 items-center">
-                <div className="flex-1 relative group">
+            <div className="flex flex-1 w-full gap-3 items-center min-w-0">
+                <div className="flex-1 relative group min-w-0">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 group-focus-within:text-indigo-500 transition-colors" />
                     <input 
                         type="text"
-                        placeholder="Buscar..."
+                        placeholder="Buscar transações..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all shadow-sm"
@@ -1512,19 +1516,20 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
                 </div>
             </div>
 
-            <div className="hidden md:flex gap-2">
+            <div className="hidden md:flex items-center gap-2 shrink-0">
                 <button
                     onClick={() => onNavigate(View.SUBSCRIPTIONS)}
-                    className="flex items-center gap-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-4 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors font-medium text-sm shadow-sm"
+                    className="p-2.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                    title="Assinaturas Recorrentes"
                 >
-                    <Repeat className="w-4 h-4 text-indigo-500" />
-                    Assinaturas
+                    <Repeat className="w-5 h-5 text-indigo-500" />
                 </button>
                 <button
                     onClick={() => { resetForm(); setIsFormOpen(!isFormOpen); }}
-                    className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/20 font-bold text-sm"
+                    className="p-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-500/20 font-bold"
+                    title="Nova Transação"
                 >
-                    <Plus className="w-4 h-4" /> Nova
+                    <Plus className="w-5 h-5" />
                 </button>
             </div>
           </div>
@@ -2078,31 +2083,70 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-1 flex overflow-x-auto hide-scrollbar">
           <button 
               onClick={() => setViewFilter('all')}
-              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${viewFilter === 'all' ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                viewFilter === 'all' 
+                  ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 shadow-xs' 
+                  : 'text-sky-500 hover:text-sky-600 hover:bg-sky-50/70 dark:text-sky-400 dark:hover:bg-sky-950/30'
+              }`}
           >
               <ListFilter className="w-4 h-4" /> Todas
           </button>
           <button 
               onClick={() => setViewFilter('income')}
-              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${viewFilter === 'income' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                viewFilter === 'income' 
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 shadow-xs' 
+                  : 'text-sky-500 hover:text-sky-600 hover:bg-sky-50/70 dark:text-sky-400 dark:hover:bg-sky-950/30'
+              }`}
           >
               <ArrowUpCircle className="w-4 h-4" /> Entradas
           </button>
           <button 
               onClick={() => setViewFilter('expense')}
-              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${viewFilter === 'expense' ? 'bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                viewFilter === 'expense' 
+                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/60 shadow-xs' 
+                  : 'text-sky-500 hover:text-sky-600 hover:bg-sky-50/70 dark:text-sky-400 dark:hover:bg-sky-950/30'
+              }`}
           >
               <ArrowDownCircle className="w-4 h-4" /> Saídas
           </button>
           <button 
               onClick={() => setViewFilter('late')}
-              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${viewFilter === 'late' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-400' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              className={`flex-1 min-w-[100px] py-2 px-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                lateBillsCount > 0
+                  ? (viewFilter === 'late'
+                      ? 'bg-rose-600 text-white shadow-sm ring-1 ring-rose-400/50 dark:ring-rose-500'
+                      : 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200/80 dark:border-rose-800/50 hover:bg-rose-100 dark:hover:bg-rose-900/40')
+                  : (viewFilter === 'late'
+                      ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-400 border border-rose-200/80 dark:border-rose-800/60 shadow-xs'
+                      : 'text-sky-500 hover:text-sky-600 hover:bg-sky-50/70 dark:text-sky-400 dark:hover:bg-sky-950/30')
+              }`}
+              title={lateBillsCount > 0 ? `${lateBillsCount} ${lateBillsCount === 1 ? 'conta atrasada' : 'contas atrasadas'}` : 'Atrasadas'}
           >
-              <AlertCircle className="w-4 h-4" /> Atrasadas
+              <AlertCircle className={`w-4 h-4 shrink-0 ${
+                lateBillsCount > 0
+                  ? (viewFilter === 'late' ? 'text-white' : 'text-rose-500 dark:text-rose-400')
+                  : ''
+              }`} />
+              <span>Atrasadas</span>
+              {lateBillsCount > 0 && (
+                <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[11px] font-black rounded-full leading-none transition-all ${
+                  viewFilter === 'late'
+                    ? 'bg-white text-rose-600 shadow-xs'
+                    : 'bg-rose-600 text-white'
+                }`}>
+                  {lateBillsCount}
+                </span>
+              )}
           </button>
           <button 
               onClick={() => setViewFilter('fixed')}
-              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${viewFilter === 'fixed' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              className={`flex-1 min-w-[100px] py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                viewFilter === 'fixed' 
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 shadow-xs' 
+                  : 'text-blue-600 hover:text-blue-700 hover:bg-blue-50/70 dark:text-blue-400 dark:hover:bg-blue-900/30'
+              }`}
           >
               <Infinity className="w-4 h-4" /> Fixas
           </button>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { WorkoutRoutine, RoutineDay, RoutineExercise, RoutineExerciseSet } from '../types';
-import { ChevronLeft, Plus, Save, Trash2, GripVertical, Copy, AlertTriangle, Check, Info, Settings, X } from 'lucide-react';
+import { ChevronLeft, Plus, Save, Trash2, GripVertical, Copy, AlertTriangle, Check, Info, Settings, X, Calendar, Coffee, Sparkles, RefreshCw } from 'lucide-react';
+import { WEEK_DAYS, recalculateRoutineDates, formatDateDisplay, formatDateISO, generateCalendarProjection } from '../utils/workoutScheduler';
 
 interface WorkoutRoutineEditorProps {
   routine: WorkoutRoutine | null;
@@ -23,16 +24,64 @@ const TECHNIQUES = [
 export const WorkoutRoutineEditor: React.FC<WorkoutRoutineEditorProps> = ({ routine, projectId, onSave, onCancel, initialEditingEx, isQuickEdit }) => {
   const [name, setName] = useState(routine?.name || '');
   const [description, setDescription] = useState(routine?.description || '');
-  const [days, setDays] = useState<RoutineDay[]>(
-    routine?.days || [
-      { id: Date.now().toString(), name: 'Treino A', exercises: [] }
-    ]
+  const [startDate, setStartDate] = useState(
+    routine?.startDate || routine?.days?.[0]?.scheduledDate || formatDateISO(new Date())
   );
+  const [endDate, setEndDate] = useState(routine?.endDate || '');
+  const [restDays, setRestDays] = useState<number[]>(
+    routine?.restDays !== undefined ? routine.restDays : [0] // Domingo como padrão
+  );
+  const [showCalendarPreview, setShowCalendarPreview] = useState(false);
+  const [days, setDays] = useState<RoutineDay[]>(() => {
+    const initialDays = routine?.days || [
+      { id: Date.now().toString(), name: 'Treino A', exercises: [] }
+    ];
+    const initialStart = routine?.startDate || initialDays[0]?.scheduledDate || formatDateISO(new Date());
+    const initialRest = routine?.restDays !== undefined ? routine.restDays : [0];
+    return recalculateRoutineDates(initialDays, initialStart, initialRest);
+  });
   const [draggedEx, setDraggedEx] = useState<{dayIndex: number, exIndex: number} | null>(null);
   const [editingEx, setEditingEx] = useState<{dayIndex: number, exIndex: number} | null>(initialEditingEx || null);
 
+  const handleStartDateChange = (newDate: string) => {
+    setStartDate(newDate);
+    setDays(prev => recalculateRoutineDates(prev, newDate, restDays, endDate));
+  };
+
+  const handleEndDateChange = (newEndDate: string) => {
+    setEndDate(newEndDate);
+    setDays(prev => recalculateRoutineDates(prev, startDate, restDays, newEndDate));
+  };
+
+  const handleToggleRestDay = (dayVal: number) => {
+    const updated = restDays.includes(dayVal)
+      ? restDays.filter(d => d !== dayVal)
+      : [...restDays, dayVal].sort();
+    setRestDays(updated);
+    setDays(prev => recalculateRoutineDates(prev, startDate, updated, endDate));
+  };
+
   const handleAddDay = () => {
-    setDays([...days, { id: Date.now().toString(), name: `Treino ${String.fromCharCode(65 + days.length)}`, exercises: [] }]);
+    const nextLetter = String.fromCharCode(65 + days.length);
+    const updatedDays = [
+      ...days,
+      { id: Date.now().toString(), name: `Treino ${nextLetter}`, exercises: [] }
+    ];
+    setDays(recalculateRoutineDates(updatedDays, startDate, restDays, endDate));
+  };
+
+  const handleUpdateDayDate = (dIndex: number, newDate: string) => {
+    const updated = [...days];
+    updated[dIndex] = { ...updated[dIndex], scheduledDate: newDate };
+    if (dIndex === 0) {
+      setStartDate(newDate);
+    }
+    const baseDate = updated[0]?.scheduledDate || startDate;
+    setDays(recalculateRoutineDates(updated, baseDate, restDays, endDate));
+  };
+
+  const handleRecalculateCycle = () => {
+    setDays(recalculateRoutineDates(days, startDate, restDays, endDate));
   };
 
   const handleAddExercise = (dayIndex: number) => {
@@ -199,6 +248,9 @@ export const WorkoutRoutineEditor: React.FC<WorkoutRoutineEditorProps> = ({ rout
       projectId,
       name,
       description,
+      startDate,
+      endDate: endDate || undefined,
+      restDays,
       days,
     };
     onSave(submitData);
@@ -243,10 +295,131 @@ export const WorkoutRoutineEditor: React.FC<WorkoutRoutineEditorProps> = ({ rout
           </div>
         </div>
 
+        {/* Agendamento & Periodização Dinâmica */}
+        <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-5 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700/60 pb-3">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              <h4 className="font-bold text-slate-800 dark:text-white text-base">Agendamento & Periodização Dinâmica</h4>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowCalendarPreview(!showCalendarPreview)}
+              className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center gap-1.5 self-start sm:self-auto bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-900/50 transition-colors cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              {showCalendarPreview ? 'Ocultar Projeção' : 'Ver Projeção do Ciclo (14 dias)'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Data Inicial do Ciclo (Treino A)</label>
+              <input 
+                type="date" 
+                className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:border-indigo-500 font-medium text-slate-800 dark:text-white"
+                value={startDate}
+                onChange={e => handleStartDateChange(e.target.value)}
+              />
+              <p className="text-[11px] text-slate-400 mt-1">Primeiro dia do ciclo. Os próximos treinos seguem dinamicamente a partir daqui.</p>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Data Final / Término (Opcional)</label>
+              <input 
+                type="date" 
+                className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:border-indigo-500 font-medium text-slate-800 dark:text-white"
+                value={endDate}
+                onChange={e => handleEndDateChange(e.target.value)}
+              />
+              <p className="text-[11px] text-slate-400 mt-1">Data limite ou previsão para troca de ficha/periodização.</p>
+            </div>
+          </div>
+
+          {/* Dias de Descanso da Semana */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                <Coffee className="w-3.5 h-3.5 text-amber-500" />
+                Dias de Descanso da Semana (Off)
+              </label>
+              <span className="text-xs text-slate-400">
+                {restDays.length === 0 ? 'Sem descanso fixo (dias contínuos)' : `${restDays.length} dia(s) de descanso`}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-2.5">
+              Clique para marcar os dias de descanso. A distribuição das datas pulará estes dias automaticamente.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {WEEK_DAYS.map((dayOption) => {
+                const isSelected = restDays.includes(dayOption.value);
+                return (
+                  <button
+                    key={dayOption.value}
+                    type="button"
+                    onClick={() => handleToggleRestDay(dayOption.value)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
+                      isSelected
+                        ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700/60 shadow-sm'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    {isSelected && <Coffee className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
+                    <span>{dayOption.short}</span>
+                    {isSelected && <span className="text-[10px] font-normal opacity-75">(Off)</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Projeção do Calendário */}
+          {showCalendarPreview && (
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/60 animate-fade-in">
+              <div className="flex items-center justify-between mb-3">
+                <h5 className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
+                  Projeção do Ciclo (Próximos 14 dias)
+                </h5>
+                <button
+                  type="button"
+                  onClick={handleRecalculateCycle}
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                >
+                  <RefreshCw className="w-3 h-3" /> Recalcular
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                {generateCalendarProjection(days, startDate, restDays, 14).map((proj, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-2.5 rounded-xl border text-center transition-all ${
+                      proj.isRest
+                        ? 'bg-amber-50/70 dark:bg-amber-950/25 border-amber-200 dark:border-amber-900/40 text-amber-700 dark:text-amber-400'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 shadow-xs'
+                    }`}
+                  >
+                    <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500">
+                      {formatDateDisplay(proj.date).split(' ')[1] || ''}
+                    </div>
+                    <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 my-0.5">
+                      {proj.date.split('-').slice(1).reverse().join('/')}
+                    </div>
+                    <div className={`text-[11px] font-bold truncate mt-1 ${proj.isRest ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
+                      {proj.isRest ? '☕ Descanso' : proj.dayName}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="space-y-6">
           <div className="flex justify-between items-center">
-            <h4 className="font-bold text-lg text-slate-800 dark:text-white">Dias / Divisão do Treino</h4>
-            <button onClick={handleAddDay} className="flex items-center gap-1 text-sm font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/40 px-3 py-1.5 rounded-lg transition-colors">
+            <div>
+              <h4 className="font-bold text-lg text-slate-800 dark:text-white">Dias / Divisão do Treino</h4>
+              <p className="text-xs text-slate-400 mt-0.5">As datas avançam dinamicamente na ordem de treino ignorando os dias de descanso.</p>
+            </div>
+            <button onClick={handleAddDay} className="flex items-center gap-1 text-sm font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/40 px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
               <Plus className="w-4 h-4" /> Adicionar Dia
             </button>
           </div>
@@ -257,30 +430,53 @@ export const WorkoutRoutineEditor: React.FC<WorkoutRoutineEditorProps> = ({ rout
 
             return (
               <div key={day.id} className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-3xl overflow-hidden shadow-sm">
-                <div className="bg-slate-50 dark:bg-slate-800/80 p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center gap-4">
-                  <input 
-                    type="text" 
-                    placeholder="Nome do Dia (Ex: Treino A - Costas/Bíceps)"
-                    className="bg-transparent font-bold text-lg text-slate-800 dark:text-white outline-none w-full"
-                    value={day.name}
-                    onChange={(e) => {
-                      const newDays = [...days];
-                      newDays[dIndex].name = e.target.value;
-                      setDays(newDays);
-                    }}
-                  />
-                  <button 
-                    onClick={() => {
-                      if(confirm("Excluir este dia inteiro?")) {
+                <div className="bg-slate-50 dark:bg-slate-800/80 p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <input 
+                      type="text" 
+                      placeholder="Nome do Dia (Ex: Treino A - Costas/Bíceps)"
+                      className="bg-transparent font-bold text-lg text-slate-800 dark:text-white outline-none w-full"
+                      value={day.name}
+                      onChange={(e) => {
                         const newDays = [...days];
-                        newDays.splice(dIndex, 1);
+                        newDays[dIndex].name = e.target.value;
                         setDays(newDays);
-                      }
-                    }}
-                    className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 self-start md:self-auto">
+                    <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs">
+                      <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 shrink-0">Data:</span>
+                      <input
+                        type="date"
+                        className="bg-transparent text-xs font-bold text-slate-800 dark:text-white outline-none cursor-pointer"
+                        value={day.scheduledDate || ''}
+                        onChange={(e) => handleUpdateDayDate(dIndex, e.target.value)}
+                        title="Alterar esta data recalculando as seguintes"
+                      />
+                      {day.scheduledDate && (
+                        <span className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 ml-1">
+                          {formatDateDisplay(day.scheduledDate).split(' ')[1] || ''}
+                        </span>
+                      )}
+                    </div>
+
+                    <button 
+                      onClick={() => {
+                        if(confirm("Excluir este dia inteiro?")) {
+                          const newDays = [...days];
+                          newDays.splice(dIndex, 1);
+                          setDays(recalculateRoutineDates(newDays, startDate, restDays));
+                        }
+                      }}
+                      className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-colors cursor-pointer"
+                      title="Excluir dia"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="p-4 space-y-4">

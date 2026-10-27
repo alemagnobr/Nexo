@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { WorkoutRoutine, RoutineDay, RoutineExercise } from '../types';
 import { ChevronLeft, Play, Pause, Square, Check, RotateCcw, FastForward, Edit2, TrendingUp, Plus, Minus, X } from 'lucide-react';
-import { WorkoutRoutineEditor } from './WorkoutRoutineEditor';
+import { advanceWorkoutCycleOnCompletion } from '../utils/workoutScheduler';
 
 interface WorkoutPlayerProps {
   routine: WorkoutRoutine;
@@ -92,6 +92,8 @@ export const WorkoutPlayer: React.FC<WorkoutPlayerProps> = ({ routine, dayIndex,
       } else {
         // Workout finished!
         setIsResting(false);
+        const updated = advanceWorkoutCycleOnCompletion(routine, dayIndex);
+        onUpdateRoutine(updated);
         onBack();
       }
     }

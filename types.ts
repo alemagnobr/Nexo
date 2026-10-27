@@ -551,6 +551,9 @@ export interface RoutineDay {
   name: string; // Ex: Treino A - Peito, Segunda-feira
   dayOfWeek?: number; // 0 (Sun) to 6 (Sat)
   exercises: RoutineExercise[];
+  scheduledDate?: string; // Data prevista para este treino (YYYY-MM-DD)
+  lastCompletedDate?: string; // Data da última conclusão (YYYY-MM-DD)
+  completedDates?: string[]; // Histórico de conclusões
 }
 
 export interface WorkoutRoutine {
@@ -558,6 +561,10 @@ export interface WorkoutRoutine {
   projectId: string;
   name: string;
   description?: string;
+  startDate?: string; // Data de início do ciclo (YYYY-MM-DD)
+  endDate?: string; // Data de término opcional (YYYY-MM-DD)
+  restDays?: number[]; // Dias de descanso semanais: 0 (Dom) a 6 (Sáb)
+  isCycleCompleted?: boolean; // Se atingiu a data final do projeto e finalizou
   days: RoutineDay[];
   createdAt: string;
   updatedAt: string;

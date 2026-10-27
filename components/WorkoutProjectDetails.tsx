@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { ChevronLeft, Target, Calendar as CalendarIcon, Activity, Plus, Edit2, Trash2 } from 'lucide-react';
 import { WorkoutProject, WorkoutRoutine, RoutineDay, RoutineExercise } from '../types';
-import { WorkoutRoutineEditor } from './WorkoutRoutineEditor';
 import { WorkoutRoutineViewer } from './WorkoutRoutineViewer';
 import { WorkoutPlayer } from './WorkoutPlayer';
+import { formatDateDisplay } from '../utils/workoutScheduler';
 
 interface WorkoutProjectDetailsProps {
   project: WorkoutProject;
@@ -14,10 +14,8 @@ interface WorkoutProjectDetailsProps {
 
 export const WorkoutProjectDetails: React.FC<WorkoutProjectDetailsProps> = ({ project, onBack, data, actions }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'routines' | 'dietas'>('info');
-  const [editingRoutine, setEditingRoutine] = useState<WorkoutRoutine | null | 'new'>(null);
   const [viewingRoutine, setViewingRoutine] = useState<WorkoutRoutine | null>(null);
   const [playingRoutineDay, setPlayingRoutineDay] = useState<{ routineId: string; dayIndex: number } | null>(null);
-  const [editingExercisePointer, setEditingExercisePointer] = useState<{ dayIndex: number, exIndex: number } | null>(null);
 
   const [isEditingObjective, setIsEditingObjective] = useState(false);
   const [objectiveInput, setObjectiveInput] = useState(project.objective);
@@ -40,14 +38,28 @@ export const WorkoutProjectDetails: React.FC<WorkoutProjectDetailsProps> = ({ pr
     (r: WorkoutRoutine) => r.projectId === project.id
   );
 
-  const handleSaveRoutine = (routineData: any) => {
-    if (editingRoutine === 'new') {
-      actions.addWorkoutRoutine?.(routineData);
-    } else if (editingRoutine) {
-      actions.updateWorkoutRoutine?.(editingRoutine.id || routineData.id, routineData);
-    }
-    setEditingRoutine(null);
-    setEditingExercisePointer(null);
+  const handleCreateNewRoutine = () => {
+    const newRoutine: WorkoutRoutine = {
+      id: Date.now().toString(),
+      projectId: project.id,
+      name: `Ficha ${projectRoutines.length + 1}`,
+      description: 'Foco da rotina',
+      startDate: project.startDate || new Date().toISOString().split('T')[0],
+      endDate: project.endDate,
+      restDays: [0], // Domingo default
+      days: [
+        {
+          id: Date.now().toString() + '1',
+          name: 'Treino A',
+          exercises: [],
+          scheduledDate: project.startDate || new Date().toISOString().split('T')[0],
+        }
+      ],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    actions.addWorkoutRoutine?.(newRoutine);
+    setViewingRoutine(newRoutine);
   };
 
   if (viewingRoutine) {
@@ -55,94 +67,28 @@ export const WorkoutProjectDetails: React.FC<WorkoutProjectDetailsProps> = ({ pr
     const upToDateRoutine = projectRoutines.find((r: WorkoutRoutine) => r.id === viewingRoutine.id) || viewingRoutine;
     if (playingRoutineDay) {
       return (
-        <>
-          <WorkoutPlayer 
-            routine={upToDateRoutine}
-            dayIndex={playingRoutineDay.dayIndex}
-            onBack={() => setPlayingRoutineDay(null)}
-            onUpdateRoutine={(r: WorkoutRoutine) => {
-              actions.updateWorkoutRoutine?.(r.id, r);
-            }}
-            onEditExercise={(dayIndex, exIndex) => {
-              setEditingExercisePointer({ dayIndex, exIndex });
-              setEditingRoutine(upToDateRoutine);
-            }}
-          />
-          {editingRoutine && editingExercisePointer && (
-            <div className="fixed inset-0 z-[60]">
-              <WorkoutRoutineEditor 
-                routine={upToDateRoutine} 
-                projectId={project.id} 
-                onSave={handleSaveRoutine} 
-                onCancel={() => {
-                  setEditingRoutine(null);
-                  setEditingExercisePointer(null);
-                }} 
-                initialEditingEx={editingExercisePointer}
-                isQuickEdit={!!editingExercisePointer}
-              />
-            </div>
-          )}
-        </>
-      );
-    }
-    if (editingRoutine && editingExercisePointer) {
-      return (
-        <WorkoutRoutineEditor 
-          routine={upToDateRoutine} 
-          projectId={project.id} 
-          onSave={handleSaveRoutine} 
-          onCancel={() => {
-            setEditingRoutine(null);
-            setEditingExercisePointer(null);
-          }} 
-          initialEditingEx={editingExercisePointer}
-          isQuickEdit={!!editingExercisePointer}
-        />
-      );
-    }
-    if (editingRoutine) {
-      return (
-        <WorkoutRoutineEditor 
-          routine={upToDateRoutine} 
-          projectId={project.id} 
-          onSave={handleSaveRoutine} 
-          onCancel={() => {
-            setEditingRoutine(null);
-            setEditingExercisePointer(null);
-          }} 
-          initialEditingEx={editingExercisePointer}
-          isQuickEdit={!!editingExercisePointer}
+        <WorkoutPlayer 
+          routine={upToDateRoutine}
+          dayIndex={playingRoutineDay.dayIndex}
+          onBack={() => setPlayingRoutineDay(null)}
+          onUpdateRoutine={(r: WorkoutRoutine) => {
+            actions.updateWorkoutRoutine?.(r.id, r);
+          }}
+          onEditExercise={() => {
+            setPlayingRoutineDay(null);
+          }}
         />
       );
     }
     return (
       <WorkoutRoutineViewer 
         routine={upToDateRoutine} 
+        project={project}
         onBack={() => setViewingRoutine(null)} 
-        onEdit={() => setEditingRoutine(upToDateRoutine)} 
         onUpdateRoutine={(r: WorkoutRoutine) => {
           actions.updateWorkoutRoutine?.(r.id, r);
         }}
-        onEditExercise={(dayIndex, exIndex) => {
-          setEditingExercisePointer({ dayIndex, exIndex });
-          setEditingRoutine(upToDateRoutine);
-        }}
         onPlayDay={(dayIndex) => setPlayingRoutineDay({ routineId: upToDateRoutine.id, dayIndex })}
-      />
-    );
-  }
-
-  if (editingRoutine === 'new') {
-    return (
-      <WorkoutRoutineEditor 
-        routine={null} 
-        projectId={project.id} 
-        onSave={handleSaveRoutine} 
-        onCancel={() => {
-          setEditingRoutine(null);
-          setEditingExercisePointer(null);
-        }} 
       />
     );
   }
@@ -263,7 +209,7 @@ export const WorkoutProjectDetails: React.FC<WorkoutProjectDetailsProps> = ({ pr
               <CalendarIcon className="w-5 h-5 text-indigo-500" />
               Fichas Vinculadas
             </h3>
-            <button onClick={() => setEditingRoutine('new')} className="flex items-center gap-1 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors">
+            <button onClick={handleCreateNewRoutine} className="flex items-center gap-1 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors cursor-pointer">
               <Plus className="w-4 h-4" /> Nova Ficha
             </button>
           </div>
@@ -290,8 +236,20 @@ export const WorkoutProjectDetails: React.FC<WorkoutProjectDetailsProps> = ({ pr
                   </div>
                   <h4 className="font-bold text-slate-800 dark:text-white text-lg pr-12">{routine.name}</h4>
                   {routine.description && <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">{routine.description}</p>}
-                  <div className="mt-4 text-xs font-bold text-slate-400 uppercase">
-                    {routine.days.length} dias na rotina
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 rounded-lg">
+                      {routine.days.length} {routine.days.length === 1 ? 'divisão' : 'divisões'}
+                    </span>
+                    {routine.restDays && routine.restDays.length > 0 && (
+                      <span className="font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-lg border border-amber-200 dark:border-amber-900/50">
+                        ☕ {routine.restDays.length} descanso(s)
+                      </span>
+                    )}
+                    {routine.days?.[0]?.scheduledDate && (
+                      <span className="font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-1 rounded-lg border border-indigo-100 dark:border-indigo-900/40">
+                        📅 {formatDateDisplay(routine.days[0].scheduledDate)}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
